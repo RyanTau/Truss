@@ -23,7 +23,7 @@ The Truss icon is included in the integration and companion app. Local integrati
 | Part | Installed where | Responsibility |
 | --- | --- | --- |
 | `custom_components/truss` | HA Core through HACS or manual copy | Native configuration, MCP autodetection/validation, entity selection, streaming STT bridge, execution, Assist response |
-| `truss_engine` | HA OS app/add-on or your own Docker host | Local streaming sherpa-onnx transcription and local Laya inference |
+| `truss_engine` | Linux Docker service beside HA, or optional HA OS app | Local streaming sherpa-onnx transcription and local Laya inference |
 
 ```text
 Assist microphone → Truss Live STT → streamed PCM audio → Truss engine
@@ -44,7 +44,31 @@ The engine never receives your HA access token. The integration executes fixed, 
 - A computer running the Truss engine, or HA OS with the companion app installed. Python 3.12 is used in the container. Packaged inference uses CPU.
 - Space for PyTorch, Laya, the transcription model, and cache. Pinned model files total about 0.92 GB; reserve several GB for the full installation and benchmark RAM/CPU on your machine. Initial startup downloads model files; subsequent inference is local.
 
-## Installation: Home Assistant OS
+## Installation: Home Assistant on Linux
+
+This is the normal setup for Home Assistant installed as a Linux app or container. HACS installs only `custom_components/truss`; run the Truss engine separately on the same Linux host or another trusted Linux machine.
+
+1. Install Truss through HACS as an **Integration**, then restart Home Assistant.
+2. Clone this repository on the Linux machine that will run the engine. From its repository root, generate a token:
+
+   ```sh
+   openssl rand -hex 32
+   ```
+
+3. Create `.env` beside `compose.yaml` with `TRUSS_API_TOKEN=` followed by that generated value. Start the engine:
+
+   ```sh
+   docker compose up -d --build
+   docker compose logs -f truss-engine
+   ```
+
+   Wait for `Truss models are ready`. The first start downloads the models and can take several minutes.
+4. In Home Assistant, add **Truss Live Voice**. Enter `http://YOUR_LINUX_HOST_LAN_IP:10350` as its engine URL and paste the same secret as the engine token. From Home Assistant Container, `localhost` is the HA container, so it cannot reach the engine that way.
+5. Continue with [Configure Truss](#configure-truss).
+
+`compose.yaml` stores models in a Docker volume and uses `restart: unless-stopped`, so the engine restarts with Docker. Keep port 10350 on your trusted LAN. The engine does not need, receive, or store your Home Assistant long-lived access token.
+
+## Optional: Home Assistant OS app
 
 For an unpublished local test, copy the `truss_engine` folder to `/addons/truss_engine` on HA OS using Samba or SSH, then refresh the app store and find **Truss Local Engine** under local apps. Continue at step 3 below, using the manual integration install in step 4. This follows HA's [local app development workflow](https://developers.home-assistant.io/docs/apps/testing/#remote-development). No GitHub publication is needed for this path.
 
@@ -58,7 +82,7 @@ For repository installation:
    - Copy `custom_components/truss` into `/config/custom_components/truss`. Alternatively, run `python scripts/package_release.py` and extract `dist/truss-manual-install.zip` into `/config` (it contains the `custom_components/truss` path).
 5. Restart Home Assistant. Use the **Add Truss** badge above, or **Settings → Devices & services → Add integration → Truss Live Voice**.
 
-The companion app runs models in its own environment; the integration never installs PyTorch into HA Core. HA Container users use the standalone engine instructions below instead of the app store.
+The companion app runs models in its own environment; the integration never installs PyTorch into HA Core.
 
 ## Configure Truss
 
@@ -98,9 +122,9 @@ External STT must return **partial transcripts while audio is still arriving**. 
 - Stock **Ollama chat/generate streaming is text output streaming**, not this audio-to-partial-transcript protocol. Do not paste an Ollama URL into the STT field. An audio model hosted elsewhere needs a compatible streaming server/adapter.
 - A generic external WebSocket passing the URL check is not proof of protocol compatibility; the first session validates actual messages. Only the protocols listed here are supported.
 
-## Run the engine yourself
+## Manual engine setup
 
-From this repository root:
+`compose.yaml` above is the supported Linux path. To run the engine manually from this repository root:
 
 ```sh
 docker build -t truss-engine ./truss_engine

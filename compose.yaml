@@ -1,0 +1,17 @@
+services:
+  truss-engine:
+    build:
+      context: ./truss_engine
+    container_name: truss-engine
+    restart: unless-stopped
+    ports:
+      - "10350:10350"
+    environment:
+      # Put this in a .env file next to this compose file. Do not commit it.
+      TRUSS_API_TOKEN: ${TRUSS_API_TOKEN:?Set TRUSS_API_TOKEN in .env}
+    volumes:
+      # Keeps downloaded models when the container is recreated.
+      - truss-models:/data
+
+volumes:
+  truss-models:
