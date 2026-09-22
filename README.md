@@ -34,7 +34,7 @@ The engine never receives your HA access token. The integration executes fixed, 
 
 ## Requirements
 
-- Home Assistant **2025.11 or later**, with an Assist-compatible microphone (Companion app, Voice device, ESPHome satellite, etc.). This minimum targets the MCP Streamable HTTP endpoint used by Truss. Compatibility was checked against the 2025.11 source APIs; installation on that version still needs runtime validation.
+- Home Assistant **2026.1 or later**, with an Assist-compatible microphone (Companion app, Voice device, ESPHome satellite, etc.). The minimum is set to 2026.1.0. Truss uses MCP Streamable HTTP and Assist voice APIs; installation on the minimum version still needs runtime validation.
 - HA's official **Model Context Protocol Server**, with **Assist API** selected and **Control Home Assistant** enabled.
 - A long-lived access token for the **same HA instance**. MCP autodetection suggests the existing HA URL; it does not generate credentials or scan the network.
 - A computer running the Truss engine, or HA OS with the companion app installed. Python 3.12 is used in the container. Packaged inference uses CPU.
@@ -73,7 +73,7 @@ The companion app runs models in its own environment; the integration never inst
 
 Both Truss entities must be selected together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. Typed chat through Truss Response is not implemented.
 
-## Supported commands in 0.1.1
+## Supported commands in 0.1.2
 
 - Turn **lights, switches, fans, and input booleans** on/off.
 - Activate **scenes and scripts**.

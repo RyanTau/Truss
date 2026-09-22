@@ -1,3 +1,7 @@
+# 0.1.2
+
+- Set the Home Assistant minimum to 2026.1.0 for both the integration and companion app.
+
 # 0.1.1
 
 - Lower the Home Assistant minimum to 2025.11.0, whose MCP Streamable HTTP API is compatible with Truss.
