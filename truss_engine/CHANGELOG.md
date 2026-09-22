@@ -1,3 +1,8 @@
+# 0.1.3
+
+- Add the Truss thought-bubble/audio-wave icon to the companion app and integration brand assets.
+- Include brand PNGs in manual installation packages and document HA/HACS icon compatibility.
+
 # 0.1.2
 
 - Set the Home Assistant minimum to 2026.1.0 for both the integration and companion app.

@@ -1,6 +1,7 @@
 """Offline structural checks; no claim of runtime HA validation."""
 import ast
 import json
+import struct
 from pathlib import Path
 import sys
 
@@ -18,3 +19,13 @@ for required in ("hacs.json", "repository.yaml", "truss_engine/config.yaml", "tr
 if "YOUR_GITHUB_OWNER" in manifest["documentation"]:
     print("Publication pending: run scripts/set_repository.py with the real GitHub URL.")
 print("Python syntax, JSON, translations, and package layout passed.")
+for name, size in (("icon.png", 256), ("truss_engine/icon.png", 128), ("truss_engine/logo.png", 256)):
+    data = (ROOT / name).read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", data[16:24]) == (size, size), name
+for path in (ROOT / "custom_components/truss/brand").glob("*.png"):
+    size = 512 if "@2x" in path.name else 256
+    data = path.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", data[16:24]) == (size, size), path
+    assert data[25] == 6, "Brand PNG must preserve RGBA transparency"
+assert (ROOT / "icon.png").read_bytes() == (ROOT / "custom_components/truss/brand/icon.png").read_bytes()
+print("Brand PNG dimensions and alpha format passed.")

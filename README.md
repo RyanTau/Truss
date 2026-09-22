@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/RyanTau/Truss/main/icon.png" alt="Truss: a thought bubble containing a sound wave" width="128" height="128">
+
 # Truss Live Voice for Home Assistant
 
 **Act while you speak.** Truss streams Assist microphone audio to a local engine, updates Laya's action probabilities on each changed partial transcript, and calls Home Assistant's MCP tools as soon as an action crosses your threshold. There is no separate web UI.
@@ -13,6 +15,8 @@ The **first badge configures an already installed integration**; it does not dow
 [![Download with HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=RyanTau&repository=Truss&category=integration)
 [![Add Truss app repository](https://my.home-assistant.io/badges/supervisor_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FRyanTau%2FTruss)
 <!-- INSTALL_BADGES_END -->
+
+The Truss icon is included in the integration and companion app. Local integration branding requires **HA 2026.3+**; HA 2026.1/2026.2 and some HACS listing views may still show a placeholder. The minimum HA version remains **2026.1.0**. See [icon support and installation details](docs/BRANDING.md).
 
 ## What is included
 
@@ -73,7 +77,7 @@ The companion app runs models in its own environment; the integration never inst
 
 Both Truss entities must be selected together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. Typed chat through Truss Response is not implemented.
 
-## Supported commands in 0.1.2
+## Supported commands in 0.1.3
 
 - Turn **lights, switches, fans, and input booleans** on/off.
 - Activate **scenes and scripts**.

@@ -10,7 +10,7 @@ def package():
     destination.parent.mkdir(exist_ok=True)
     with ZipFile(destination, "w", compression=ZIP_DEFLATED) as archive:
         for path in sorted((ROOT / "custom_components/truss").rglob("*")):
-            if path.is_file() and path.suffix in (".py", ".json") and "__pycache__" not in path.parts:
+            if path.is_file() and path.suffix in (".py", ".json", ".png") and "__pycache__" not in path.parts:
                 archive.write(path, path.relative_to(ROOT).as_posix())
     print(destination)
 
