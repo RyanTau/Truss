@@ -41,3 +41,7 @@ The pinned model files total approximately 0.92 GB. The Windows test environment
 ## Not yet verified
 
 Actual HA config/options flows and MCP server, physical voice satellites and devices, Docker/Supervisor builds, ARM performance, other microphones/accents/noise, and deployment against an actual external sherpa server. External-protocol adapters were tested with protocol simulators. Follow [the release checklist](RELEASE.md) before publishing compatibility claims.
+
+## Home Assistant minimum version
+
+Version 0.1.1 lowers the declared minimum to 2025.11.0. Source review confirmed the [MCP Streamable HTTP endpoint](https://github.com/home-assistant/core/blob/2025.11.0/homeassistant/components/mcp_server/http.py), STT stream entity interface, conversation processing/control feature, exposure lookup, and options-flow config entry API at that tag. HA 2025.10.0's MCP implementation uses the older separate SSE transport; Truss does not implement that transport. The add-on uses the legacy-compatible `io.hass.type=addon` Docker label. This source review does not replace installing and exercising both the minimum and current HA releases.

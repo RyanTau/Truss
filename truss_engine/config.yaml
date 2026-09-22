@@ -1,5 +1,5 @@
 name: Truss Local Engine
-version: "0.1.0"
+version: "0.1.1"
 slug: truss_engine
 description: Streaming speech recognition and local Laya action probabilities
 arch:
@@ -8,7 +8,7 @@ arch:
 startup: application
 boot: auto
 init: false
-homeassistant: "2026.9.0"
+homeassistant: "2025.11.0"
 ports:
   10350/tcp: 10350
 ports_description:
