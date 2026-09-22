@@ -1,0 +1,6 @@
+.git
+.reference
+__pycache__
+.venv
+data
+options.json

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.tools/
+.runtime/
+.cache/
+.model-test/
+.pytest_cache/
+.reference/
+.env
+options.json
+data/
+dist/
+*.log

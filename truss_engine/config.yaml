@@ -1,0 +1,28 @@
+name: Truss Local Engine
+version: "0.1.0"
+slug: truss_engine
+description: Streaming speech recognition and local Laya action probabilities
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+homeassistant: "2026.9.0"
+ports:
+  10350/tcp: 10350
+ports_description:
+  10350/tcp: Authenticated Truss streaming API
+options:
+  api_token: ""
+  bundled_stt: true
+  threads: 4
+  device: cpu
+  laya_model_path: ""
+schema:
+  api_token: password
+  bundled_stt: bool
+  threads: int(1,16)
+  device: list(cpu)
+  laya_model_path: str?
+url: https://github.com/RyanTau/Truss

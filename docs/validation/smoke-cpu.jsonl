@@ -1,0 +1,15 @@
+{"text": "Turn on the kitchen light", "probabilities": {"kitchen_on": 0.9514, "kitchen_off": 0.0179, "bedroom_on": 0.0138, "bedroom_off": 0.0093}, "ms": 478}
+{"text": "Turn off the bedroom light", "probabilities": {"kitchen_on": 0.1345, "kitchen_off": 0.0478, "bedroom_on": 0.1916, "bedroom_off": 0.5944}, "ms": 500}
+{"text": "Do not turn on the kitchen light", "probabilities": {"kitchen_on": 0.604, "kitchen_off": 0.3307, "bedroom_on": 0.0282, "bedroom_off": 0.0211}, "ms": 464}
+{"text": "Turn on", "probabilities": {"kitchen_on": 0.5127, "kitchen_off": 0.0764, "bedroom_on": 0.2647, "bedroom_off": 0.0999}, "ms": 444}
+{"type": "partial", "revision": 1, "text": "TURN", "audio_ended": false, "elapsed_ms": 748}
+{"type": "partial", "revision": 2, "text": "TURN ON THE", "audio_ended": false, "elapsed_ms": 1083}
+{"type": "probabilities", "revision": 1, "current_revision": 2, "text": "TURN", "probabilities": {"kitchen_on": 0.2334, "kitchen_off": 0.158, "bedroom_on": 0.3777, "bedroom_off": 0.1258}, "inference_ms": 509.6, "audio_ended": false, "elapsed_ms": 1258}
+{"type": "partial", "revision": 3, "text": "TURN ON THE KITCHEN", "audio_ended": false, "elapsed_ms": 1398}
+{"type": "partial", "revision": 4, "text": "TURN ON THE KITCHEN LIKE", "audio_ended": false, "elapsed_ms": 1713}
+{"type": "probabilities", "revision": 2, "current_revision": 4, "text": "TURN ON THE", "probabilities": {"kitchen_on": 0.2644, "kitchen_off": 0.1075, "bedroom_on": 0.3737, "bedroom_off": 0.2001}, "inference_ms": 550.0, "audio_ended": false, "elapsed_ms": 1808}
+{"type": "partial", "revision": 5, "text": "TURN ON THE KITCHEN LIKE PLE", "audio_ended": false, "elapsed_ms": 2029}
+{"type": "probabilities", "revision": 4, "current_revision": 5, "text": "TURN ON THE KITCHEN LIKE", "probabilities": {"kitchen_on": 0.8748, "kitchen_off": 0.0509, "bedroom_on": 0.0304, "bedroom_off": 0.0212}, "inference_ms": 518.2, "audio_ended": false, "elapsed_ms": 2326}
+{"type": "partial", "revision": 6, "text": "TURN ON THE KITCHEN LIKE PLEASE", "audio_ended": false, "elapsed_ms": 2355}
+{"type": "probabilities", "revision": 6, "current_revision": 6, "text": "TURN ON THE KITCHEN LIKE PLEASE", "probabilities": {"kitchen_on": 0.9226, "kitchen_off": 0.0303, "bedroom_on": 0.0153, "bedroom_off": 0.0134}, "inference_ms": 444.8, "audio_ended": true, "elapsed_ms": 3290}
+{"live_probability_events": 3, "final_transcript": "TURN ON THE KITCHEN LIKE PLEASE"}
