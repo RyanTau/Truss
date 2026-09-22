@@ -12,6 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .catalog import DecisionGate, build_candidates
 from .const import DOMAIN, EVENT_ACTION, EVENT_PROBABILITIES, RECEIPT_PREFIX
 from .mcp import MCPClient
+from .selection import selected_entity_ids
 
 
 class TrussCoordinator:
@@ -40,7 +41,7 @@ class TrussCoordinator:
     def entities(self):
         entities = []
         registry, devices, areas = er.async_get(self.hass), dr.async_get(self.hass), ar.async_get(self.hass)
-        for entity_id in self.config["entities"]:
+        for entity_id in selected_entity_ids(self.hass, self.config):
             state = self.hass.states.get(entity_id)
             if not state or not async_should_expose(self.hass, "conversation", entity_id):
                 continue

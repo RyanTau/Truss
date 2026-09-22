@@ -99,7 +99,7 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
 1. **MCP**: the flow detects a configured MCP integration and suggests your HA URL plus `/api/mcp`. Correct it if necessary. Enter your profile's long-lived access token. Setup initializes MCP and checks that compatible Assist tools are actually present. Use this HA instance, not another server: entity discovery is local to HA.
 2. **Engine**: enter `http://YOUR_HA_LAN_IP:10350` (or your separate engine host), and the engine's API token. `localhost` inside HA Container is not your separate Docker container.
 3. **Transcription**: choose **Run locally with Truss** for the bundled English streaming Zipformer model. Or choose **External sherpa-onnx streaming server** (for example `ws://YOUR_STT_HOST:6006`) or **External Truss-protocol WebSocket**, and enter its URL/token. See the protocol requirements below.
-4. **Entities**: select 1–24 devices, starting with 2–4. Expose them to Assist under **Settings → Voice assistants → Expose** as well. Only selected, exposed, available entities participate.
+4. **Device selection**: use **All supported entities exposed to Assist** (the default for new installs), **Assist entities in selected rooms**, or **Choose individual entities**. Automatic modes refresh each utterance as Assist exposure and room assignments change. Room mode uses the entity's room or its device's room if none is assigned. Manage exposure under **Settings → Voice assistants → Expose**. The scope must contain 1–24 entities; choose fewer rooms or use manual selection if there are more. Truss rejects an oversized scope rather than silently dropping devices. Existing installations keep their manual selection until you change it. Start with 2–4 devices for lower latency.
 5. **Threshold**: defaults to `0.95`, with a `0.05` lead over the next candidate. Set the margin to `0` if you want threshold-only execution (exact ties still wait). There is no forced wait for silence or consecutive-update delay. Scores for an unchanged spoken prefix remain eligible when more words are appended; rewritten earlier words invalidate them. An action can therefore happen before a later spoken correction.
 6. Under **Settings → Voice assistants**, create/edit an assistant:
    - Language: English.
@@ -111,7 +111,7 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
 
 Both Truss entities must be selected together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. Typed chat through Truss Response is not implemented.
 
-## Supported commands in 0.1.3
+## Supported commands in 0.1.4
 
 - Turn **lights, switches, fans, and input booleans** on/off.
 - Activate **scenes and scripts**.

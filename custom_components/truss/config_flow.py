@@ -10,6 +10,7 @@ from homeassistant.helpers.network import get_url, NoURLAvailableError
 from .catalog import find_tool
 from .const import DOMAIN, MAX_ENTITIES, SUPPORTED_DOMAINS
 from .mcp import MCPClient, validate_url
+from .selection import selected_entity_ids
 
 
 async def check_mcp(hass, data):
@@ -35,7 +36,7 @@ async def check_engine(hass, data):
 
 def engine_schema(defaults):
     return vol.Schema({
-        vol.Required("engine_url", default=defaults.get("engine_url", "http://homeassistant.local:10350")): str,
+        vol.Required("engine_url", default=defaults.get("engine_url", "")): str,
         vol.Required("engine_token", default=defaults.get("engine_token", "")): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
         vol.Required("stt_mode", default=defaults.get("stt_mode", "bundled")): selector.SelectSelector(selector.SelectSelectorConfig(options=[{"value": "bundled", "label": "Run locally with Truss (sherpa-onnx)"}, {"value": "sherpa", "label": "External sherpa-onnx streaming server"}, {"value": "external", "label": "External Truss-protocol WebSocket"}])),
         vol.Optional("stt_url", default=defaults.get("stt_url", "")): str,
@@ -45,7 +46,9 @@ def engine_schema(defaults):
 
 def actions_schema(defaults):
     return vol.Schema({
-        vol.Required("entities", default=defaults.get("entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain=SUPPORTED_DOMAINS, multiple=True)),
+        vol.Required("entity_mode", default=defaults.get("entity_mode", "manual" if "entities" in defaults else "assist")): selector.SelectSelector(selector.SelectSelectorConfig(options=[{"value": "assist", "label": "All supported entities exposed to Assist"}, {"value": "areas", "label": "Assist entities in selected rooms"}, {"value": "manual", "label": "Choose individual entities"}])),
+        vol.Optional("areas", default=defaults.get("areas", [])): selector.AreaSelector(selector.AreaSelectorConfig(multiple=True)),
+        vol.Optional("entities", default=defaults.get("entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain=SUPPORTED_DOMAINS, multiple=True)),
         vol.Required("threshold", default=defaults.get("threshold", 0.95)): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1)),
         vol.Required("margin", default=defaults.get("margin", 0.05)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
     })
@@ -96,7 +99,7 @@ class TrussConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_actions(self, user_input=None):
         errors = {}
         if user_input is not None:
-            if not 1 <= len(user_input["entities"]) <= MAX_ENTITIES:
+            if not 1 <= len(selected_entity_ids(self.hass, user_input)) <= MAX_ENTITIES:
                 errors["base"] = "entity_count"
             else:
                 self.settings.update(user_input)
@@ -113,16 +116,19 @@ class TrussOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         defaults = {**self.config_entry.data, **self.config_entry.options}
         errors = {}
-        schema = dict(engine_schema(defaults).schema)
-        schema.update(actions_schema(defaults).schema)
+        form_defaults = {**defaults, **(user_input or {})}
+        schema = dict(engine_schema(form_defaults).schema)
+        schema.update(actions_schema(form_defaults).schema)
         schema.update({vol.Required("mcp_url", default=defaults["mcp_url"]): str,
                        vol.Required("mcp_token", default=defaults["mcp_token"]): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))})
         if user_input is not None:
             try:
-                if not 1 <= len(user_input["entities"]) <= MAX_ENTITIES:
+                if not 1 <= len(selected_entity_ids(self.hass, user_input)) <= MAX_ENTITIES:
                     raise ValueError("entity_count")
                 await check_mcp(self.hass, user_input)
                 await check_engine(self.hass, user_input)
+            except ValueError as error:
+                errors["base"] = "entity_count" if str(error) == "entity_count" else "cannot_connect"
             except Exception:
                 errors["base"] = "cannot_connect"
             else:

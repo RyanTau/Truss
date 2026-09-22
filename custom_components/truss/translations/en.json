@@ -5,30 +5,67 @@
       "user": {
         "title": "Connect Home Assistant MCP",
         "description": "{detected}. Use the MCP server on THIS Home Assistant instance with the Assist API and Control Home Assistant enabled. The URL is suggested automatically; enter a long-lived access token from your profile. [Set up MCP](https://my.home-assistant.io/redirect/config_flow/?domain=mcp_server).",
-        "data": {"mcp_url": "MCP server URL", "mcp_token": "Home Assistant access token"}
+        "data": {
+          "mcp_url": "MCP server URL",
+          "mcp_token": "Home Assistant access token"
+        }
       },
       "engine": {
         "title": "Connect the local Truss engine",
-        "description": "Install and start the Truss Local Engine app first, or run its Docker image on your own computer. It runs Laya locally. Choose bundled live transcription, an external sherpa-onnx streaming server, or an endpoint implementing the Truss streaming STT protocol. Standard Whisper upload and Ollama chat endpoints are not compatible. Wait until the engine log says its models are ready.",
-        "data": {"engine_url": "Truss engine URL", "engine_token": "Truss engine API token", "stt_mode": "Live transcription provider", "stt_url": "External STT WebSocket URL (external mode only)", "stt_token": "External STT token (optional)"}
+        "description": "Start the Truss engine on Windows, Docker, or Home Assistant OS and wait for 'Truss models are ready'. Enter the engine computer's LAN address, for example http://192.168.1.50:10350, and its pairing token. Choose bundled live transcription or a compatible streaming server. Standard Whisper upload and Ollama chat endpoints are not compatible.",
+        "data": {
+          "engine_url": "Truss engine URL",
+          "engine_token": "Truss engine API token",
+          "stt_mode": "Live transcription provider",
+          "stt_url": "External STT WebSocket URL (external mode only)",
+          "stt_token": "External STT token (optional)"
+        }
       },
       "actions": {
         "title": "Choose devices and execution threshold",
-        "description": "Select 1–24 entities, starting with 2–4 for lower latency. They must also be exposed to Assist in Settings > Voice assistants > Expose. Supported actions: on/off and scene/script activation. Actions execute during speech, once per utterance, when probability and the lead over the second candidate meet these thresholds. Scores are model estimates, not measured guarantees.",
-        "data": {"entities": "Allowed entities", "threshold": "Minimum action probability (0.5–1)", "margin": "Minimum lead over the next action (0–1)"}
+        "description": "Use supported entities already exposed to Assist, limit them to selected rooms, or choose individual entities. Room selection applies only in room mode; the individual list applies only in manual mode. Automatic modes refresh each utterance. The scope must contain 1–24 entities; fewer entities reduce latency. Expose devices in Settings > Voice assistants > Expose. Actions may execute during speech, once per utterance.",
+        "data": {
+          "entities": "Allowed entities (manual mode only)",
+          "threshold": "Minimum action probability (0.5–1)",
+          "margin": "Minimum lead over the next action (0–1)",
+          "entity_mode": "Device selection",
+          "areas": "Rooms (room mode only)"
+        }
       }
     },
-    "error": {"cannot_connect_mcp": "Could not discover compatible MCP tools. Check this HA instance's URL, token, Assist API, and Control Home Assistant setting.", "cannot_connect_engine": "Engine unavailable, models not ready, or invalid streaming endpoint. Check app logs, URL, and token.", "entity_count": "Select between 1 and 24 entities."},
-    "abort": {"single_instance_allowed": "Truss is already configured. Use its Configure button to change settings."}
+    "error": {
+      "cannot_connect_mcp": "Could not discover compatible MCP tools. Check this HA instance's URL, token, Assist API, and Control Home Assistant setting.",
+      "cannot_connect_engine": "Engine unavailable, models not ready, or invalid streaming endpoint. Check app logs, URL, and token.",
+      "entity_count": "The scope must contain 1–24 entities. Choose fewer rooms or use manual selection if it exceeds 24. For automatic modes, expose supported devices to Assist first."
+    },
+    "abort": {
+      "single_instance_allowed": "Truss is already configured. Use its Configure button to change settings."
+    }
   },
   "options": {
     "step": {
       "init": {
         "title": "Configure Truss Live Voice",
-        "description": "Changing settings reconnects Truss and stops active sessions. External transcription must use the selected sherpa-onnx or Truss streaming protocol. Entities must be exposed to Assist.",
-        "data": {"mcp_url": "MCP server URL", "mcp_token": "Home Assistant access token", "engine_url": "Truss engine URL", "engine_token": "Truss engine API token", "stt_mode": "Live transcription provider", "stt_url": "External STT WebSocket URL", "stt_token": "External STT token", "entities": "Allowed entities", "threshold": "Minimum action probability", "margin": "Minimum lead over next action"}
+        "description": "Changing settings reconnects Truss and stops active sessions. Use supported entities already exposed to Assist, limit them to selected rooms, or choose individual entities. Room selection applies only in room mode; the individual list applies only in manual mode. Automatic modes refresh each utterance. The scope must contain 1–24 entities; fewer entities reduce latency. Expose devices in Settings > Voice assistants > Expose. Actions may execute during speech, once per utterance.",
+        "data": {
+          "mcp_url": "MCP server URL",
+          "mcp_token": "Home Assistant access token",
+          "engine_url": "Truss engine URL",
+          "engine_token": "Truss engine API token",
+          "stt_mode": "Live transcription provider",
+          "stt_url": "External STT WebSocket URL",
+          "stt_token": "External STT token",
+          "entities": "Allowed entities (manual mode only)",
+          "threshold": "Minimum action probability",
+          "margin": "Minimum lead over next action",
+          "entity_mode": "Device selection",
+          "areas": "Rooms (room mode only)"
+        }
       }
     },
-    "error": {"cannot_connect": "Could not validate settings. Select 1–24 entities and check the MCP and engine endpoints, tokens, and model readiness."}
+    "error": {
+      "cannot_connect": "Could not validate settings. Select 1–24 entities and check the MCP and engine endpoints, tokens, and model readiness.",
+      "entity_count": "The scope must contain 1–24 entities. Choose fewer rooms or use manual selection if it exceeds 24. For automatic modes, expose supported devices to Assist first."
+    }
   }
 }

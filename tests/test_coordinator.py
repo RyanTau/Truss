@@ -98,6 +98,40 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(name == "truss_probabilities" for name, _ in self.events))
         self.assertEqual([data["status"] for name, data in self.events if name == "truss_action"], ["accepted"])
 
+    async def test_assist_scope_refreshes_exposure_and_filters_domains(self):
+        self.coordinator.config.update(entity_mode="assist", entities=["light.old"])
+        ids = ["light.kitchen", "switch.desk", "sensor.temperature", "light.hidden"]
+        self.hass.states.async_all = lambda: [types.SimpleNamespace(entity_id=item) for item in ids]
+        self.hass.exposed = set(ids[:-1])
+        self.assertEqual([e["entity_id"] for e in self.coordinator.entities()], ["light.kitchen", "switch.desk"])
+        self.hass.exposed.remove("light.kitchen")
+        self.assertEqual([e["entity_id"] for e in self.coordinator.entities()], ["switch.desk"])
+
+    async def test_area_scope_uses_entity_override_and_device_fallback(self):
+        # patch.dict removes imported modules when its context exits; use the
+        # resolver retained by the coordinator with its original HA doubles.
+        selection = types.SimpleNamespace(**load_coordinator().selected_entity_ids.__globals__)
+        records = {
+            "light.kitchen": types.SimpleNamespace(area_id="kitchen", device_id="bed_device"),
+            "switch.desk": types.SimpleNamespace(area_id=None, device_id="bed_device"),
+            "light.unassigned": types.SimpleNamespace(area_id=None, device_id=None),
+        }
+        self.hass.states.async_all = lambda: [types.SimpleNamespace(entity_id=item) for item in records]
+        self.hass.exposed = set(records)
+        with patch.object(selection.er, "async_get", return_value=types.SimpleNamespace(async_get=records.get)), patch.object(selection.dr, "async_get", return_value=types.SimpleNamespace(async_get=lambda key: types.SimpleNamespace(area_id="bedroom"))):
+            self.assertEqual(selection.selected_entity_ids(self.hass, {"entity_mode": "areas", "areas": ["kitchen"]}), ["light.kitchen"])
+            self.assertEqual(selection.selected_entity_ids(self.hass, {"entity_mode": "areas", "areas": ["bedroom"]}), ["switch.desk"])
+            self.assertEqual(selection.selected_entity_ids(self.hass, {"entity_mode": "areas", "areas": []}), [])
+
+    async def test_automatic_scope_over_limit_fails_before_execution(self):
+        self.coordinator.config["entity_mode"] = "assist"
+        ids = ["light.room_" + str(i) for i in range(25)]
+        self.hass.exposed = set(ids)
+        self.hass.states.async_all = lambda: [types.SimpleNamespace(entity_id=item) for item in ids]
+        with self.assertRaisesRegex(ValueError, "at most 24"):
+            await self.coordinator.async_stream(self.audio_until_action(), "en")
+        self.assertEqual(self.calls, [])
+
     async def test_failed_action_not_retried_on_final_transcript(self):
         self.fail_action = True
         receipt = await self.coordinator.async_stream(self.audio_until_action(), "en")
