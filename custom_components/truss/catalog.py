@@ -32,6 +32,7 @@ def build_candidates(entities: list, tools: list) -> list:
             verb = "Activate" if domain in ("scene", "script") else f"Turn {operation}"
             candidates.append({
                 "id": f"{entity_id}:{operation}", "entity_id": entity_id,
+                "name": entity["name"],
                 "label": f"{verb} {entity['name']}", "area": entity.get("area", ""),
                 "aliases": entity.get("aliases", [])[:8], "state": entity.get("state", ""),
                 "tool": tool, "arguments": {"name": entity_id},

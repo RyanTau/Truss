@@ -111,16 +111,24 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
 
 Both Truss entities must be selected together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. Typed chat through Truss Response is not implemented.
 
-## Supported commands in 0.1.4
+## Supported commands in 0.1.6
 
 - Turn **lights, switches, fans, and input booleans** on/off.
 - Activate **scenes and scripts**.
-- Explicit entity names, aliases, and room descriptions contribute to Laya's interpretation.
+- Say a device's full friendly name or an Assist alias and an explicit on/off request. For example, give `light.ball_lamp` the alias **Turkish lamp**, and the dining room lamp the alias **Tall lamp**. Names must identify one selected device; duplicate names, incomplete names, and unknown targets wait. Room-only requests and arbitrary paraphrases are not resolved by this version.
 - **One action per utterance**, including at most one attempt if MCP times out. No automatic retry of a possibly executed action.
 
 Brightness, temperature, covers, timers, multi-action commands, and implicit “this room” resolution are not implemented. The STT entity interface does not supply the satellite's device ID to this bridge; name the device explicitly. Add broader parameter extraction and intent mappings as separate work. MCP tool names and schemas are discovered, not assumed to accept arbitrary service calls.
 
-Laya evaluates up to four concrete actions plus a `wait` choice per forward pass. Returned values are the model's action probabilities; the omitted `wait` choice retains some probability mass. With multiple groups, scores are local to each group and do not form a single whole-home probability distribution. The model is not trained here on partial speech: empirical calibration and latency evaluation remain necessary. A configured threshold is an execution rule, not a reliability guarantee. Long entity lists mean more model work; no “33 ms whole-home control” claim is made.
+The engine first resolves an explicit, unique device name/alias and a supported operation from each partial transcript. Laya then chooses between that concrete action and `wait` in a single decision. This replaces the old separately scored groups, whose probabilities could unfairly favour an unrelated device. There is no comparison or renormalization across groups. All candidate IDs remain in the event: ineligible actions have zero; the eligible action receives Laya's unmodified probability conditional on the resolved device/operation. `score_scope: resolved_action` identifies these semantics. These are not whole-home probabilities or calibrated correctness guarantees. The threshold remains 0.95; no lower value is silently applied. The conservative resolver requires an explicit on/off command (or scene/script activation) and waits on missing targets, multiple targets, conflicting operations, or recognized negation. It cannot anticipate a later spoken correction.
+
+Bundled transcription now uses streaming beam search with per-session device-name and alias hints. Hints help recognition but do not guarantee that a name will be transcribed correctly. A garbled name such as “colored lion” will wait rather than guess “colour light.” No fuzzy name substitutions are made.
+
+### Updating to 0.1.6
+
+Update **both** the HACS integration and the separate engine, then restart each. HACS does not update the engine. On Windows, stop the engine, run `git pull` in the Truss repository, and run `powershell -NoProfile -File scripts/run_engine_windows.ps1 -Install` to install the new `sentencepiece` dependency and start it. If using your own Cygwin launcher, install `truss_engine/requirements.txt` into its existing Python environment and keep using its existing token/cache configuration. For Docker, run `git pull` followed by `docker compose up -d --build`. The first updated engine start downloads a pinned 245 KB speech tokenizer; subsequent runs reuse the cache. Authenticated `/health` reports `engine_version: 0.1.6` and `score_scope: resolved_action`.
+
+In Home Assistant, add the names you actually speak under **Settings → Voice assistants → Expose → the entity → Aliases**. This does not rename the entity ID. The engine receives those aliases on the next utterance, including as transcription hints. In `truss_probabilities`, `score_scope: legacy_grouped` means the engine still needs updating.
 
 ## External transcription, Whisper, and Ollama
 

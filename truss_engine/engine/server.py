@@ -11,6 +11,7 @@ import aiohttp
 from aiohttp import web
 from .models import LocalModels
 from .streaming import LiveDecisions
+from . import VERSION, SCORE_SCOPE
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +35,8 @@ def validate_start(start):
         if not isinstance(item.get("area", ""), str) or len(item.get("area", "")) > 120:
             raise ValueError("Invalid area")
         aliases = item.get("aliases", [])
+        if not isinstance(item.get("name", ""), str) or len(item.get("name", "")) > 160:
+            raise ValueError("Invalid device name")
         if not isinstance(aliases, list) or len(aliases) > 8 or any(not isinstance(a, str) or len(a) > 120 for a in aliases):
             raise ValueError("Invalid aliases")
     stt = start.get("stt", {})
@@ -79,7 +82,7 @@ class Engine:
         self.audio_pool.shutdown(wait=False, cancel_futures=True)
 
     async def health(self, request):
-        return web.json_response({"protocol": "truss-v1", "ready": self.ready, "bundled_stt": self.models.recognizer is not None, "error": self.error, "active_sessions": self.active})
+        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "score_scope": SCORE_SCOPE, "ready": self.ready, "bundled_stt": self.models.recognizer is not None, "error": self.error, "active_sessions": self.active})
 
     async def score(self, text, candidates):
         return await asyncio.get_running_loop().run_in_executor(self.inference_pool, self.models.score, text, candidates)
@@ -100,7 +103,11 @@ class Engine:
             self.sockets.add(ws)
             start = await asyncio.wait_for(ws.receive_json(), timeout=10)
             candidates = validate_start(start)
-            decisions = LiveDecisions(self.score, ws.send_json, candidates)
+            async def emit(event):
+                if event.get("type") == "probabilities":
+                    event["score_scope"] = SCORE_SCOPE
+                await ws.send_json(event)
+            decisions = LiveDecisions(self.score, emit, candidates)
             decisions_task = asyncio.create_task(decisions.run())
             if start["stt"]["mode"] == "bundled":
                 reader_task = asyncio.create_task(self.bundled(ws, decisions))
@@ -135,7 +142,7 @@ class Engine:
         return ws
 
     async def bundled(self, ws, decisions):
-        stream = self.models.create_stream()
+        stream = await asyncio.get_running_loop().run_in_executor(self.audio_pool, self.models.create_stream, decisions.candidates)
         pending = bytearray()
         total = 0
         async for message in ws:

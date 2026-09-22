@@ -9,18 +9,20 @@ Authenticate `GET /health` and `GET /v1/stream` with `Authorization: Bearer <eng
 First WebSocket message:
 
 ```json
-{"type":"start","session_id":"unique-id","language":"en","sample_rate":16000,"candidates":[{"id":"light.kitchen:on","entity_id":"light.kitchen","label":"Turn on Kitchen light","area":"Kitchen","aliases":[]}],"stt":{"mode":"bundled"}}
+{"type":"start","session_id":"unique-id","language":"en","sample_rate":16000,"candidates":[{"id":"light.kitchen:on","entity_id":"light.kitchen","name":"Kitchen light","label":"Turn on Kitchen light","area":"Kitchen","aliases":[]}],"stt":{"mode":"bundled"}}
 ```
 
 For external transcription, `stt` is `{"mode":"external","url":"ws://host:port/path","token":"optional secret"}`. The HA MCP token is never included.
 
 Send binary frames containing **raw signed 16-bit little-endian mono PCM, 16 kHz**, not WAV headers. Send `{"type":"end"}` after the audio. Sessions are limited to 60 seconds of audio, 75 seconds wall time, 48 concrete candidates, and two concurrent clients.
 
+In 0.1.6, candidate IDs follow `entity_id:on` or `entity_id:off` (scene/script activation uses `on`). Optional `name` supplies the friendly name; older clients fall back to the label with its operation prefix removed. Names and aliases provide per-session bundled-ASR hints. The engine resolves one explicit device and operation, then Laya confirms that action against wait. In `score_scope: resolved_action`, only the resolved action can have a nonzero probability; other zeros mean ineligible. If resolution fails, all scores are zero and no Laya forward pass is needed. The eligible action's score is the model's conditional execute probability, not a global device-choice distribution. It is not renormalized or boosted. The omitted wait choice retains the remaining mass. Original transcript text is preserved in events; inference casing is standardized to uppercase. `/health` includes `engine_version` and `score_scope`.
+
 Server messages:
 
 ```json
 {"type":"partial","revision":1,"text":"turn on the kitchen light"}
-{"type":"probabilities","revision":1,"current_revision":1,"text":"turn on the kitchen light","probabilities":{"light.kitchen:on":0.97},"inference_ms":123.4}
+{"type":"probabilities","revision":1,"current_revision":1,"text":"turn on the kitchen light","probabilities":{"light.kitchen:on":0.97},"score_scope":"resolved_action","inference_ms":123.4}
 {"type":"done","revision":1,"text":"turn on the kitchen light"}
 ```
 

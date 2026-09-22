@@ -18,10 +18,10 @@ async def run(wav_path, threads, model_path=""):
     print("Loading real local models...", flush=True)
     await asyncio.to_thread(models.load)
     candidates = [
-        {"id": "kitchen_on", "label": "Turn on the kitchen light", "entity_id": "light.kitchen", "area": "Kitchen", "aliases": []},
-        {"id": "kitchen_off", "label": "Turn off the kitchen light", "entity_id": "light.kitchen", "area": "Kitchen", "aliases": []},
-        {"id": "bedroom_on", "label": "Turn on the bedroom light", "entity_id": "light.bedroom", "area": "Bedroom", "aliases": []},
-        {"id": "bedroom_off", "label": "Turn off the bedroom light", "entity_id": "light.bedroom", "area": "Bedroom", "aliases": []},
+        {"id": "light.kitchen:on", "label": "Turn on the kitchen light", "entity_id": "light.kitchen", "area": "Kitchen", "aliases": []},
+        {"id": "light.kitchen:off", "label": "Turn off the kitchen light", "entity_id": "light.kitchen", "area": "Kitchen", "aliases": []},
+        {"id": "light.bedroom:on", "label": "Turn on the bedroom light", "entity_id": "light.bedroom", "area": "Bedroom", "aliases": []},
+        {"id": "light.bedroom:off", "label": "Turn off the bedroom light", "entity_id": "light.bedroom", "area": "Bedroom", "aliases": []},
     ]
     for text in ("Turn on the kitchen light", "Turn off the bedroom light", "Do not turn on the kitchen light", "Turn on"):
         start = time.perf_counter()
@@ -47,7 +47,7 @@ async def run(wav_path, threads, model_path=""):
 
     decisions = LiveDecisions(score, emit, candidates)
     task = asyncio.create_task(decisions.run())
-    stream = models.create_stream()
+    stream = models.create_stream(candidates)
     try:
         for offset in range(0, len(audio), 2560):
             target = start + offset / 32000

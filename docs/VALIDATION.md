@@ -1,6 +1,29 @@
 # Development validation
 
-## What was actually run
+## 0.1.6 device-selection regression
+
+44 automated tests pass, including explicit target/operation resolution, alias collisions, refusal to guess unknown names, unrelated-device and candidate-order invariance, raw confirmation score preservation, per-stream transcription hints, and live execution before end-of-audio. Package checks also pass. Transport tests use simulated HA and models.
+
+The real pinned Laya and streaming Zipformer models were run offline on Windows CPU with four threads. The new 244,865-byte `bpe.model` was verified against its upstream hash; sentencepiece 0.2.2 supplies its vocabulary. Six local Windows speech-synthesized recordings were decoded in 80 ms chunks, then scored, without contacting HA or operating devices. These measurements are a small regression check, not an accuracy benchmark:
+
+| Synthetic command | Resolved action probability |
+| --- | --- |
+| Turn on the tall lamp | 0.9721 |
+| Turn off the tall lamp | 0.9783 |
+| Turn on the Turkish lamp | 0.9775 |
+| Turn off the Turkish lamp | 0.9799 |
+| Turn on the colour light | 0.9749 |
+| Turn off the colour light | 0.9814 |
+
+All six final transcripts matched the spoken commands and selected the correct action above the unchanged 0.95 threshold. All unrelated actions were ineligible (zero). The tall lamp had the alias `Tall lamp`; the ball lamp had the alias `Turkish lamp`. These aliases must exist in a user's HA configuration too. The audio was processed faster than real time in this test; combined ASR and scoring took 425–492 ms, excluding microphone/HA/device transport. Scores are conditional execute/wait probabilities after explicit name and operation resolution, not model probabilities over all household actions.
+
+The exact supplied bad transcripts `THUNDER TALL LAMP ON` and `TURN OFF THE COLORED LION`, incomplete `Turn on`, and the tested negated request all abstained. We deliberately do not rewrite those bad transcripts into commands. Name hints were accepted by the recognizer; both hinted and unhinted beam search recognized these clean synthetic recordings, so this test does not establish a measured hint-accuracy gain on noisy human speech. Silence can still yield spurious ASR words (observed `AND`), which lack a resolved device/action and therefore remain ineligible.
+
+Results: [selection-0.1.6.jsonl](validation/selection-0.1.6.jsonl). Reproduce the text checks with `python scripts/smoke_selection.py`; optionally pass `--audio-dir` with six mono PCM16 16 kHz recordings named as described by `--help`. General accents/noise, real device control, and deployment on the user's host remain unverified.
+
+The existing kitchen recording was also replayed with audio paced in real time. The new transcript correctly contained `KITCHEN LIGHT`, and its live score reached 0.9713 at 1987 ms while audio was still arriving; that Laya pass took 289.7 ms. Five probability events arrived before audio ended (three were unresolved prefixes with all-zero scores). The final score after `PLEASE` was lower, 0.889; live commitment would already have qualified on the earlier complete command. This illustrates why the final score alone does not describe live behaviour. No device was operated. See [live-0.1.6.jsonl](validation/live-0.1.6.jsonl).
+
+## Historical 0.1.0 baseline: what was run
 
 - 29 automated tests using real HTTP/WebSocket transports with simulated Home Assistant and model responses. These cover execution before audio end, exactly-once attempts, prefix continuation versus rewritten speech, exposure checks, MCP JSON/SSE, external STT protocols, authentication, and disconnects.
 - Actual pinned English Laya and quantized streaming Zipformer models, running offline on CPU in a Windows Python 3.12 environment, with four threads. Installed versions: Laya 0.3.4, PyTorch 2.14.0+cpu, sherpa-onnx 1.13.8, transformers 5.17.0. Downloads were verified against upstream file hashes.

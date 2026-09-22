@@ -130,7 +130,7 @@ class TrussCoordinator:
                                     continue
                             probabilities = event.get("probabilities", {})
                             score_updates += 1
-                            self.hass.bus.async_fire(EVENT_PROBABILITIES, {"session_id": session_id, "revision": event["revision"], "current_revision": latest_revision, "transcript": event.get("text", ""), "probabilities": probabilities, "inference_ms": event.get("inference_ms"), "already_fired": gate.claimed})
+                            self.hass.bus.async_fire(EVENT_PROBABILITIES, {"session_id": session_id, "revision": event["revision"], "current_revision": latest_revision, "transcript": event.get("text", ""), "probabilities": probabilities, "score_scope": event.get("score_scope", "legacy_grouped"), "inference_ms": event.get("inference_ms"), "already_fired": gate.claimed})
                             if candidate := gate.select(probabilities):
                                 # Keep reading partials while the MCP round-trip runs.
                                 action_task = asyncio.create_task(execute(candidate))

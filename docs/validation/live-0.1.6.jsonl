@@ -1,0 +1,18 @@
+Loading real local models...
+{"text": "Turn on the kitchen light", "probabilities": {"light.kitchen:on": 0.9713, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "ms": 333}
+{"text": "Turn off the bedroom light", "probabilities": {"light.kitchen:on": 0.0, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.9736}, "ms": 330}
+{"text": "Do not turn on the kitchen light", "probabilities": {"light.kitchen:on": 0.0, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "ms": 0}
+{"text": "Turn on", "probabilities": {"light.kitchen:on": 0.0, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "ms": 0}
+{"type": "partial", "revision": 1, "text": "TURN", "audio_ended": false, "elapsed_ms": 751}
+{"type": "probabilities", "revision": 1, "current_revision": 1, "text": "TURN", "probabilities": {"light.kitchen:on": 0.0, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "inference_ms": 0.9, "audio_ended": false, "elapsed_ms": 752}
+{"type": "partial", "revision": 2, "text": "TURN ON THE KIT", "audio_ended": false, "elapsed_ms": 1060}
+{"type": "probabilities", "revision": 2, "current_revision": 2, "text": "TURN ON THE KIT", "probabilities": {"light.kitchen:on": 0.0, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "inference_ms": 1.1, "audio_ended": false, "elapsed_ms": 1061}
+{"type": "partial", "revision": 3, "text": "TURN ON THE KITCHEN", "audio_ended": false, "elapsed_ms": 1391}
+{"type": "probabilities", "revision": 3, "current_revision": 3, "text": "TURN ON THE KITCHEN", "probabilities": {"light.kitchen:on": 0.0, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "inference_ms": 0.2, "audio_ended": false, "elapsed_ms": 1391}
+{"type": "partial", "revision": 4, "text": "TURN ON THE KITCHEN LIGHT", "audio_ended": false, "elapsed_ms": 1697}
+{"type": "probabilities", "revision": 4, "current_revision": 4, "text": "TURN ON THE KITCHEN LIGHT", "probabilities": {"light.kitchen:on": 0.9713, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "inference_ms": 289.7, "audio_ended": false, "elapsed_ms": 1987}
+{"type": "partial", "revision": 5, "text": "TURN ON THE KITCHEN LIGHT PLE", "audio_ended": false, "elapsed_ms": 2040}
+{"type": "probabilities", "revision": 5, "current_revision": 5, "text": "TURN ON THE KITCHEN LIGHT PLE", "probabilities": {"light.kitchen:on": 0.8382, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "inference_ms": 309.2, "audio_ended": false, "elapsed_ms": 2349}
+{"type": "partial", "revision": 6, "text": "TURN ON THE KITCHEN LIGHT PLEASE", "audio_ended": false, "elapsed_ms": 2354}
+{"type": "probabilities", "revision": 6, "current_revision": 6, "text": "TURN ON THE KITCHEN LIGHT PLEASE", "probabilities": {"light.kitchen:on": 0.889, "light.kitchen:off": 0.0, "light.bedroom:on": 0.0, "light.bedroom:off": 0.0}, "inference_ms": 330.8, "audio_ended": true, "elapsed_ms": 2684}
+{"live_probability_events": 5, "final_transcript": "TURN ON THE KITCHEN LIGHT PLEASE"}

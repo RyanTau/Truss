@@ -17,7 +17,7 @@ class FakeModels:
     def load(self):
         pass
 
-    def create_stream(self):
+    def create_stream(self, candidates=None):
         return {}
 
     def transcribe(self, stream, pcm, final=False):
