@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [ValidateLength(24, 512)]
     [string]$ApiToken,
 
@@ -26,9 +25,14 @@ if ($Install -or -not (Test-Path -LiteralPath $Python)) {
     & $Python -m pip install -r (Join-Path $Root "truss_engine\requirements.txt")
 }
 
-$env:TRUSS_API_TOKEN = $ApiToken
+if ($ApiToken) {
+    $env:TRUSS_API_TOKEN = $ApiToken
+} elseif (Test-Path Env:TRUSS_API_TOKEN) {
+    Remove-Item Env:TRUSS_API_TOKEN
+}
 $env:TRUSS_PORT = $Port.ToString()
 $env:HF_HOME = Join-Path $Root "data\huggingface"
+$env:TRUSS_TOKEN_FILE = Join-Path $Root "data\truss_engine_token"
 
 Write-Host "Starting Truss engine on port $Port. Press Ctrl+C to stop it."
 & $Python (Join-Path $Root "truss_engine\run.py")

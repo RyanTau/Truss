@@ -49,24 +49,18 @@ The engine never receives your HA access token. The integration executes fixed, 
 This is the normal setup for Home Assistant installed as a Linux app or container. HACS installs only `custom_components/truss`; run the Truss engine separately on the same Linux host or another trusted Linux machine.
 
 1. Install Truss through HACS as an **Integration**, then restart Home Assistant.
-2. Clone this repository on the Linux machine that will run the engine. From its repository root, generate a token:
-
-   ```sh
-   openssl rand -hex 32
-   ```
-
-3. Create `.env` beside `compose.yaml` with `TRUSS_API_TOKEN=` followed by that generated value. Start the engine:
+2. Clone this repository on the Linux machine that will run the engine. From its repository root, start the engine:
 
    ```sh
    docker compose up -d --build
    docker compose logs -f truss-engine
    ```
 
-   Wait for `Truss models are ready`. The first start downloads the models and can take several minutes.
-4. In Home Assistant, add **Truss Live Voice**. Enter `http://YOUR_LINUX_HOST_LAN_IP:10350` as its engine URL and paste the same secret as the engine token. From Home Assistant Container, `localhost` is the HA container, so it cannot reach the engine that way.
+   On its first start, Truss logs a generated **pairing token** once. Copy it before continuing. Wait for `Truss models are ready`; the first start downloads the models and can take several minutes.
+3. In Home Assistant, add **Truss Live Voice**. Enter `http://YOUR_LINUX_HOST_LAN_IP:10350` as its engine URL and paste the pairing token as the engine token. From Home Assistant Container, `localhost` is the HA container, so it cannot reach the engine that way.
 5. Continue with [Configure Truss](#configure-truss).
 
-`compose.yaml` stores models in a Docker volume and uses `restart: unless-stopped`, so the engine restarts with Docker. Keep port 10350 on your trusted LAN. The engine does not need, receive, or store your Home Assistant long-lived access token.
+`compose.yaml` stores models and the generated pairing token in a Docker volume and uses `restart: unless-stopped`, so the engine restarts with Docker. Keep port 10350 on your trusted LAN. The engine does not need, receive, or store your Home Assistant long-lived access token. Set `TRUSS_API_TOKEN` in a `.env` file only if you prefer to manage the token yourself.
 
 ## Optional: Home Assistant OS app
 
@@ -76,7 +70,7 @@ For repository installation:
 
 1. Repository: [RyanTau/Truss](https://github.com/RyanTau/Truss). These project files must be published at its root before repository installation will work.
 2. In **Settings → Apps → App store → Repositories**, add that URL. On versions with older wording, this is **Add-ons → Add-on store**.
-3. Install **Truss Local Engine**. Set `api_token` to a random secret of at least 24 characters; leave `bundled_stt: true`. Start it and wait for **Truss models are ready** in its log. The first local image build downloads large dependencies.
+3. Install **Truss Local Engine**. Leave `api_token` blank to have Truss generate a pairing token on first start, or set one yourself; leave `bundled_stt: true`. Copy the generated token from the first-start log and wait for **Truss models are ready**. The first local image build downloads large dependencies.
 4. Install the integration using either:
    - **HACS → Custom repositories**: add the repository URL as an **Integration**, then download Truss; or
    - Copy `custom_components/truss` into `/config/custom_components/truss`. Alternatively, run `python scripts/package_release.py` and extract `dist/truss-manual-install.zip` into `/config` (it contains the `custom_components/truss` path).
@@ -89,17 +83,16 @@ The companion app runs models in its own environment; the integration never inst
 You can run Truss directly on a Windows PC; Docker is optional. The PC must remain on while you use voice control. Install [Python 3.12 (64-bit)](https://www.python.org/downloads/release/python-3120/) and ensure the `py` launcher is available. Clone or download this repository, then run PowerShell from its root:
 
 ```powershell
-$token = Read-Host "Enter a new Truss engine token (at least 24 characters)"
-.\scripts\run_engine_windows.ps1 -Install -ApiToken $token
+.\scripts\run_engine_windows.ps1 -Install
 ```
 
-The first start installs the Python dependencies and downloads the models. On later starts, omit `-Install`:
+The first start installs the Python dependencies, generates and displays a pairing token once, then downloads the models. Copy that token. On later starts, omit `-Install`:
 
 ```powershell
-.\scripts\run_engine_windows.ps1 -ApiToken $token
+.\scripts\run_engine_windows.ps1
 ```
 
-Keep the PowerShell window running. In the Truss integration, use `http://YOUR_WINDOWS_PC_LAN_IP:10350` and the same token. Do not use `localhost` unless Home Assistant itself is running directly on that same Windows PC. Windows Defender Firewall may ask to permit Python on private networks; allow that so Home Assistant can reach the engine.
+Keep the PowerShell window running. In the Truss integration, use `http://YOUR_WINDOWS_PC_LAN_IP:10350` and the generated pairing token. Do not use `localhost` unless Home Assistant itself is running directly on that same Windows PC. Windows Defender Firewall may ask to permit Python on private networks; allow that so Home Assistant can reach the engine. Pass `-ApiToken` only if you prefer to manage the token yourself.
 
 ## Configure Truss
 
@@ -147,7 +140,7 @@ External STT must return **partial transcripts while audio is still arriving**. 
 docker build -t truss-engine ./truss_engine
 ```
 
-Set `TRUSS_API_TOKEN` in your shell to a random secret of at least 24 characters, then:
+Set `TRUSS_API_TOKEN` in your shell if you want to choose the token yourself. Otherwise the engine creates and prints a persistent pairing token on first start. Then:
 
 ```sh
 docker run --name truss-engine --restart unless-stopped \

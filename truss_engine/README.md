@@ -6,26 +6,16 @@ Run streaming speech recognition and Laya locally for the Truss Home Assistant i
 
 ## Linux / Home Assistant Container
 
-From the repository root, generate a token and put it in a `.env` file beside `compose.yaml`:
-
-```sh
-openssl rand -hex 32
-```
-
-```dotenv
-TRUSS_API_TOKEN=paste-the-generated-secret-here
-```
-
-Then build and start the engine:
+From the repository root, build and start the engine:
 
 ```sh
 docker compose up -d --build
 docker compose logs -f truss-engine
 ```
 
-Wait for `Truss models are ready`. In the Truss integration, set the engine URL to `http://YOUR_LINUX_HOST_LAN_IP:10350` and use the same `TRUSS_API_TOKEN` value. Do not use `localhost`: from Home Assistant's container, it means the HA container rather than this engine.
+On first start, Truss prints a generated pairing token once. Copy it, then wait for `Truss models are ready`. In the Truss integration, set the engine URL to `http://YOUR_LINUX_HOST_LAN_IP:10350` and use that token. Do not use `localhost`: from Home Assistant's container, it means the HA container rather than this engine.
 
-`compose.yaml` keeps models in a named Docker volume and starts the engine again after a reboot.
+`compose.yaml` keeps models and the generated token in a named Docker volume and starts the engine again after a reboot. You can set `TRUSS_API_TOKEN` in `.env` if you prefer to manage your own token.
 
 For a native Windows installation, use `scripts/run_engine_windows.ps1` from the repository root; the main [README](../README.md#native-windows-engine) has the setup steps.
 

@@ -7,8 +7,9 @@ services:
     ports:
       - "10350:10350"
     environment:
-      # Put this in a .env file next to this compose file. Do not commit it.
-      TRUSS_API_TOKEN: ${TRUSS_API_TOKEN:?Set TRUSS_API_TOKEN in .env}
+      # Optional: set this in .env to choose your own persistent token.
+      # Otherwise the engine creates one on first start and prints it once.
+      TRUSS_API_TOKEN: ${TRUSS_API_TOKEN:-}
     volumes:
       # Keeps downloaded models when the container is recreated.
       - truss-models:/data
