@@ -84,6 +84,23 @@ For repository installation:
 
 The companion app runs models in its own environment; the integration never installs PyTorch into HA Core.
 
+## Native Windows engine
+
+You can run Truss directly on a Windows PC; Docker is optional. The PC must remain on while you use voice control. Install [Python 3.12 (64-bit)](https://www.python.org/downloads/release/python-3120/) and ensure the `py` launcher is available. Clone or download this repository, then run PowerShell from its root:
+
+```powershell
+$token = Read-Host "Enter a new Truss engine token (at least 24 characters)"
+.\scripts\run_engine_windows.ps1 -Install -ApiToken $token
+```
+
+The first start installs the Python dependencies and downloads the models. On later starts, omit `-Install`:
+
+```powershell
+.\scripts\run_engine_windows.ps1 -ApiToken $token
+```
+
+Keep the PowerShell window running. In the Truss integration, use `http://YOUR_WINDOWS_PC_LAN_IP:10350` and the same token. Do not use `localhost` unless Home Assistant itself is running directly on that same Windows PC. Windows Defender Firewall may ask to permit Python on private networks; allow that so Home Assistant can reach the engine.
+
 ## Configure Truss
 
 1. **MCP**: the flow detects a configured MCP integration and suggests your HA URL plus `/api/mcp`. Correct it if necessary. Enter your profile's long-lived access token. Setup initializes MCP and checks that compatible Assist tools are actually present. Use this HA instance, not another server: entity discovery is local to HA.

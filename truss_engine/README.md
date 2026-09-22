@@ -27,4 +27,6 @@ Wait for `Truss models are ready`. In the Truss integration, set the engine URL 
 
 `compose.yaml` keeps models in a named Docker volume and starts the engine again after a reboot.
 
+For a native Windows installation, use `scripts/run_engine_windows.ps1` from the repository root; the main [README](../README.md#native-windows-engine) has the setup steps.
+
 ## Home Assistant OS app

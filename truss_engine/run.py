@@ -13,4 +13,5 @@ if __name__ == "__main__":
     if os.environ.get("TRUSS_API_TOKEN"):
         options["api_token"] = os.environ["TRUSS_API_TOKEN"]
     os.environ.setdefault("HF_HOME", "/data/huggingface")
-    web.run_app(create_app(options), host="0.0.0.0", port=10350, access_log=None)
+    port = int(os.environ.get("TRUSS_PORT", "10350"))
+    web.run_app(create_app(options), host="0.0.0.0", port=port, access_log=None)
