@@ -190,3 +190,46 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(first, second)
         self.assertIsNotNone(self.coordinator.consume_receipt(first))
         self.assertIsNotNone(self.coordinator.consume_receipt(second))
+
+    async def test_empty_audio_is_not_reported_as_threshold_failure(self):
+        self.engine_app["engine"].models.transcribe = lambda *args: ""
+
+        async def empty_audio():
+            if False:
+                yield b""
+
+        receipt = await self.coordinator.async_stream(empty_audio(), "en")
+        self.assertIn("No microphone audio", self.coordinator.consume_receipt(receipt))
+        summary = [data for name, data in self.events if name == "truss_session"][-1]
+        self.assertEqual(summary["result"], "no_audio")
+        self.assertEqual(summary["audio_ms"], 0)
+        self.assertEqual(summary["score_updates"], 0)
+        self.assertEqual(self.calls, [])
+
+    async def test_audio_without_transcript_reports_recognition_failure(self):
+        self.engine_app["engine"].models.transcribe = lambda *args: ""
+
+        async def silence():
+            yield bytes(32000)
+
+        receipt = await self.coordinator.async_stream(silence(), "en")
+        self.assertIn("could not recognize speech", self.coordinator.consume_receipt(receipt))
+        summary = [data for name, data in self.events if name == "truss_session"][-1]
+        self.assertEqual(summary["result"], "no_transcript")
+        self.assertEqual(summary["audio_ms"], 1000)
+        self.assertEqual(self.calls, [])
+
+    async def test_recognized_command_below_threshold_has_scores(self):
+        self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: .5 for c in candidates}
+
+        async def audio():
+            yield bytes(32000)
+
+        receipt = await self.coordinator.async_stream(audio(), "en")
+        self.assertIn("No action reached", self.coordinator.consume_receipt(receipt))
+        summary = [data for name, data in self.events if name == "truss_session"][-1]
+        self.assertEqual(summary["result"], "below_threshold")
+        self.assertGreater(summary["score_updates"], 0)
+        self.assertGreater(summary["transcript_chars"], 0)
+        self.assertNotIn("transcript", summary)
+        self.assertEqual(self.calls, [])

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 
@@ -13,6 +14,8 @@ from .catalog import DecisionGate, build_candidates
 from .const import DOMAIN, EVENT_ACTION, EVENT_PROBABILITIES, RECEIPT_PREFIX
 from .mcp import MCPClient
 from .selection import selected_entity_ids
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class TrussCoordinator:
@@ -65,6 +68,11 @@ class TrussCoordinator:
         outcome = "No action reached the configured probability threshold."
         latest_revision = 0
         latest_text = ""
+        audio_bytes = 0
+        partial_updates = 0
+        score_updates = 0
+        final_text = ""
+        started = time.monotonic()
         action_task = None
         sender = None
         url = self.config["engine_url"].replace("https://", "wss://", 1).replace("http://", "ws://", 1) + "/v1/stream"
@@ -74,9 +82,11 @@ class TrussCoordinator:
                 await ws.send_json({"type": "start", "session_id": session_id, "language": language, "sample_rate": 16000, "candidates": candidates, "stt": {"mode": self.config["stt_mode"], "url": self.config.get("stt_url", ""), "token": self.config.get("stt_token", "")}})
 
                 async def send_audio():
+                    nonlocal audio_bytes
                     try:
                         async for chunk in audio:
                             await ws.send_bytes(chunk)
+                            audio_bytes += len(chunk)
                         await ws.send_json({"type": "end"})
                     except Exception:
                         await ws.close()
@@ -110,6 +120,7 @@ class TrussCoordinator:
                             continue
                         event = message.json()
                         if event.get("type") == "partial":
+                            partial_updates += 1
                             latest_revision = event["revision"]
                             latest_text = event["text"]
                         elif event.get("type") == "probabilities":
@@ -118,6 +129,7 @@ class TrussCoordinator:
                                 if not prefix or not latest_text.casefold().startswith(prefix.casefold() + " "):
                                     continue
                             probabilities = event.get("probabilities", {})
+                            score_updates += 1
                             self.hass.bus.async_fire(EVENT_PROBABILITIES, {"session_id": session_id, "revision": event["revision"], "current_revision": latest_revision, "transcript": event.get("text", ""), "probabilities": probabilities, "inference_ms": event.get("inference_ms"), "already_fired": gate.claimed})
                             if candidate := gate.select(probabilities):
                                 # Keep reading partials while the MCP round-trip runs.
@@ -125,6 +137,7 @@ class TrussCoordinator:
                         elif event.get("type") == "error":
                             raise RuntimeError("Truss transcription or inference failed")
                         elif event.get("type") == "done":
+                            final_text = event.get("text", "")
                             complete = True
                             break
                 if not complete:
@@ -140,6 +153,23 @@ class TrussCoordinator:
                     await asyncio.gather(sender, return_exceptions=True)
                 if action_task:
                     await asyncio.shield(action_task)
+        if gate.claimed:
+            result = "action_attempted"
+        elif not audio_bytes:
+            result = "no_audio"
+            outcome = "No microphone audio reached Truss. Check microphone access and the Assist audio pipeline."
+        elif not final_text.strip():
+            result = "no_transcript"
+            outcome = "Truss received audio but could not recognize speech. Check the microphone and whether Assist stopped recording too early."
+        elif not score_updates:
+            result = "no_scores"
+            outcome = "Truss recognized speech but received no usable action scores. Check the engine logs."
+        else:
+            result = "below_threshold"
+        summary = {"session_id": session_id, "audio_ms": round(audio_bytes / 32), "elapsed_ms": round((time.monotonic() - started) * 1000), "partial_updates": partial_updates, "score_updates": score_updates, "transcript_chars": len(final_text), "result": result}
+        self.hass.bus.async_fire("truss_session", summary)
+        log = _LOGGER.warning if result in ("no_audio", "no_transcript", "no_scores") else _LOGGER.debug
+        log("Truss session: result=%s audio_ms=%s elapsed_ms=%s partials=%s scores=%s transcript_chars=%s", result, summary["audio_ms"], summary["elapsed_ms"], partial_updates, score_updates, len(final_text))
         self.receipts = {key: value for key, value in self.receipts.items() if value[0] > time.monotonic()}
         if len(self.receipts) >= 100:
             self.receipts.pop(next(iter(self.receipts)))

@@ -158,6 +158,7 @@ In **Developer tools → Events**, listen to:
 
 - `truss_probabilities`: session ID, transcript revision, live text, per-action probabilities, inference time, and whether an action has already fired.
 - `truss_action`: selected entity/action and `accepted` or `failed_or_unconfirmed`.
+- `truss_session`: completed session summary with audio duration (`audio_ms`), elapsed time, partial transcript/score counts, transcript character count, and result. Contains no transcript or token. `no_audio` means no audio bytes reached Truss; `no_transcript` means audio arrived but no final speech text was recognized; `below_threshold` means scores were received but no action qualified. Empty audio and missing transcripts also produce a warning in Home Assistant's log. If Assist finishes immediately, inspect this event before adjusting the threshold and check any changes made to Home Assistant's voice activity detection.
 
 `accepted` means the MCP tool reported success. This version does not independently verify physical device state after the call. Events include transcripts and entity IDs; treat HA event access accordingly. Diagnostics omit tokens, transcripts, URLs, and entity names.
 
