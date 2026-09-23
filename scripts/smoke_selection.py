@@ -30,7 +30,9 @@ if __name__ == "__main__":
     models.load()
     for text in ("Turn the tall lamp on", "THUNDER TALL LAMP ON", "Turn off the tall lamp",
                  "Turn on the Turkish lamp", "Turn off the Turkish lamp", "Turn off the colour light",
-                 "TURN OFF THE COLORED LION", "Turn on", "Do not turn on the tall lamp"):
+                 "TURN OFF THE COLORED LION", "Turn on", "Do not turn on the tall lamp",
+                 "turksih lamp off please", "could you put the tal lamp on please",
+                 "colored light off", "tall lamp on please", "Is the tall lamp on?"):
         started = time.perf_counter()
         scores = models.score(text, candidates())
         print(json.dumps({"text": text, "scores": scores, "ms": round((time.perf_counter() - started)*1000)}), flush=True)

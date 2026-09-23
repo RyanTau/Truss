@@ -57,7 +57,13 @@ class TrussCoordinator:
             entities.append({"entity_id": entity_id, "name": state.name, "state": state.state, "area": area.name if area else "", "aliases": list(record.aliases) if record else []})
         return entities
 
-    async def async_stream(self, audio, language):
+    async def async_text(self, text, language):
+        if not text.strip() or len(text) > 1000:
+            return "Please enter a command of 1–1000 characters."
+        receipt = await self.async_stream(None, language, text=text)
+        return self.consume_receipt(receipt)
+
+    async def async_stream(self, audio, language, *, text=None):
         # Refresh discovery every utterance so removed MCP tools are not retained.
         self.tools = await self.mcp.list_tools()
         candidates = build_candidates(self.entities(), self.tools)
@@ -79,10 +85,12 @@ class TrussCoordinator:
         async with self.session.ws_connect(url, headers=self.headers, heartbeat=15, max_msg_size=1_000_000) as ws:
             self.websockets.add(ws)
             try:
-                await ws.send_json({"type": "start", "session_id": session_id, "language": language, "sample_rate": 16000, "candidates": candidates, "stt": {"mode": self.config["stt_mode"], "url": self.config.get("stt_url", ""), "token": self.config.get("stt_token", "")}})
+                await ws.send_json({"type": "start", "session_id": session_id, "language": language, "sample_rate": 16000, "candidates": candidates, **({"text": text} if text is not None else {}), "stt": {"mode": "text" if text is not None else self.config["stt_mode"], "url": self.config.get("stt_url", ""), "token": self.config.get("stt_token", "")}})
 
                 async def send_audio():
                     nonlocal audio_bytes
+                    if text is not None:
+                        return
                     try:
                         async for chunk in audio:
                             await ws.send_bytes(chunk)
@@ -155,7 +163,7 @@ class TrussCoordinator:
                     await asyncio.shield(action_task)
         if gate.claimed:
             result = "action_attempted"
-        elif not audio_bytes:
+        elif text is None and not audio_bytes:
             result = "no_audio"
             outcome = "No microphone audio reached Truss. Check microphone access and the Assist audio pipeline."
         elif not final_text.strip():

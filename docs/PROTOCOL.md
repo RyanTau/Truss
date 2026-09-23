@@ -1,5 +1,7 @@
 # Truss streaming protocol v1
 
+Since 0.1.7, text clients may send a normal start message with `stt: {"mode": "text"}` and a top-level `text` string of 1–1000 characters. Keep `sample_rate: 16000` for envelope compatibility. Do not send audio or an end message. The engine bypasses transcription and emits partial, probabilities, and done using the same decision path. Name resolution now allows close misspellings and unique shortened names; `resolved_action` scores remain conditional on that resolution.
+
 There are two different WebSocket roles. Neither is an OpenAI-compatible audio upload API, Ollama endpoint, nor a Wyoming TCP endpoint.
 
 ## HA integration → Truss engine

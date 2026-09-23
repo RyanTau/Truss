@@ -43,13 +43,27 @@ class ModelAdapterTests(unittest.TestCase):
         self.assertEqual(self.models.agent.calls[1][1]["action"]["criteria"]["execute"], "Turn off Turkish lamp")
 
     def test_abstains_on_incomplete_unknown_negated_and_multiple_targets(self):
-        for text in ("Turn on", "Tall lamp", "THUNDER TALL LAMP ON", "TURN OFF THE COLORED LION",
+        for text in ("Turn on", "Tall lamp", "TURN OFF THE COLORED LION",
                      "Do not turn on the tall lamp", "Don't turn on the tall lamp",
                      "Turn the tall lamp on and off", "Turn on the tall lamp and ball lamp",
                      "Is the tall lamp on?", "Turn on the tall lamppost"):
             with self.subTest(text=text):
                 self.assertFalse(any(self.models.score(text, self.candidates).values()))
         self.assertEqual(self.models.agent.calls, [])
+
+    def test_typoes_short_names_and_casual_commands(self):
+        for text, winner in (("turksih lamp off please", "light.ball:off"),
+                             ("could you put the tal lamp on please", "light.tall:on"),
+                             ("THUNDER TALL LAMP ON", "light.tall:on"),
+                             ("colored light off", "light.colour:off"),
+                             ("stop the tall lamp", "light.tall:off")):
+            with self.subTest(text=text):
+                self.assertEqual(self.models.score(text, self.candidates)[winner], .97)
+        for c in self.candidates:
+            c["aliases"] = []
+        self.assertEqual(self.models.score("tall lamp on", self.candidates)["light.tall:on"], .97)
+        # A typo that is equally close to two devices must not choose either.
+        self.assertFalse(any(self.models.score("turn on the wall lamp", self.candidates).values()))
 
     def test_shared_alias_abstains(self):
         for c in self.candidates:

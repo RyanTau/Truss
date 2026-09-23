@@ -49,7 +49,7 @@ def actions_schema(defaults):
         vol.Required("entity_mode", default=defaults.get("entity_mode", "manual" if "entities" in defaults else "assist")): selector.SelectSelector(selector.SelectSelectorConfig(options=[{"value": "assist", "label": "All supported entities exposed to Assist"}, {"value": "areas", "label": "Assist entities in selected rooms"}, {"value": "manual", "label": "Choose individual entities"}])),
         vol.Optional("areas", default=defaults.get("areas", [])): selector.AreaSelector(selector.AreaSelectorConfig(multiple=True)),
         vol.Optional("entities", default=defaults.get("entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain=SUPPORTED_DOMAINS, multiple=True)),
-        vol.Required("threshold", default=defaults.get("threshold", 0.95)): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1)),
+        vol.Required("threshold", default=defaults.get("threshold", 0.80)): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1)),
         vol.Required("margin", default=defaults.get("margin", 0.05)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
     })
 

@@ -1,7 +1,7 @@
 {
   "domain": "truss",
   "name": "Truss Live Voice",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "codeowners": [
     "@RyanTau"
   ],

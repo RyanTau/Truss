@@ -1,3 +1,11 @@
+# 0.1.7
+
+- Accept typed commands through Truss Response without initializing transcription.
+- Allow close name misspellings, unique shortened names, and casual operation wording.
+- Update Laya instructions to tolerate transcription errors and polite requests.
+- Preserve configured thresholds, single-action execution, and expired receipt protection.
+- Default new installations to 0.80; existing users can select 0.80 in Configure for more forgiving execution.
+
 # 0.1.6
 
 - Resolve explicit device names/Assist aliases and supported operations before one Laya execute/wait decision. Remove comparisons between unrelated groups' probabilities.

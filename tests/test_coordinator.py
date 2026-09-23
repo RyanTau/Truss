@@ -98,6 +98,23 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(name == "truss_probabilities" for name, _ in self.events))
         self.assertEqual([data["status"] for name, data in self.events if name == "truss_action"], ["accepted"])
 
+    async def test_text_skips_transcription_and_executes_once(self):
+        def forbidden(*args):
+            raise AssertionError("Text must not initialize or call speech recognition")
+        models = self.engine_app["engine"].models
+        models.create_stream = models.transcribe = forbidden
+        outcome = await self.coordinator.async_text("turn on kitchen", "en")
+        self.assertTrue(outcome.startswith("Requested:"))
+        self.assertEqual(len(self.calls), 1)
+        self.assertFalse(self.coordinator.receipts)
+
+    async def test_text_below_threshold_and_invalid_text(self):
+        self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: .4 for c in candidates}
+        self.assertIn("No action reached", await self.coordinator.async_text("kitchen on", "en"))
+        self.assertIn("1–1000", await self.coordinator.async_text(" " * 3, "en"))
+        self.assertIn("1–1000", await self.coordinator.async_text("x" * 1001, "en"))
+        self.assertEqual(self.calls, [])
+
     async def test_assist_scope_refreshes_exposure_and_filters_domains(self):
         self.coordinator.config.update(entity_mode="assist", entities=["light.old"])
         ids = ["light.kitchen", "switch.desk", "sensor.temperature", "light.hidden"]

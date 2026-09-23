@@ -55,10 +55,10 @@ class LocalModels:
         candidate, spoken_name = resolved
         operation = candidate["id"].rsplit(":", 1)[-1]
         verb = "Activate" if candidate["entity_id"].split(".")[0] in ("scene", "script") else "Turn " + operation
-        criteria = {"wait": "No complete, unambiguous request for a listed action", "execute": verb + " " + spoken_name}
+        criteria = {"wait": "Wait for a command", "execute": verb + " " + spoken_name}
         questions = {"action": {
             "type": "choice",
-            "instructions": "Which action does the user explicitly request? Select wait if the command is incomplete, ambiguous, negated, or no listed action is requested.",
+            "instructions": "Does the user want this action? Ignore spelling errors and polite filler words.",
             "criteria": criteria,
         }}
         # Bundled ASR emits uppercase. Keep external providers' capitalization

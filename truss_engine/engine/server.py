@@ -40,9 +40,12 @@ def validate_start(start):
         if not isinstance(aliases, list) or len(aliases) > 8 or any(not isinstance(a, str) or len(a) > 120 for a in aliases):
             raise ValueError("Invalid aliases")
     stt = start.get("stt", {})
-    if not isinstance(stt, dict) or stt.get("mode") not in ("bundled", "external", "sherpa"):
+    if not isinstance(stt, dict) or stt.get("mode") not in ("bundled", "external", "sherpa", "text"):
         raise ValueError("Unknown transcription mode")
-    if stt["mode"] != "bundled":
+    if stt["mode"] == "text":
+        if not isinstance(start.get("text"), str) or not start["text"].strip() or len(start["text"]) > 1000:
+            raise ValueError("Expected 1-1000 characters of text")
+    elif stt["mode"] != "bundled":
         url = urlsplit(stt.get("url", ""))
         if url.scheme not in ("ws", "wss") or not url.hostname or url.username or url.password or url.fragment:
             raise ValueError("Invalid external transcription URL")
@@ -109,7 +112,9 @@ class Engine:
                 await ws.send_json(event)
             decisions = LiveDecisions(self.score, emit, candidates)
             decisions_task = asyncio.create_task(decisions.run())
-            if start["stt"]["mode"] == "bundled":
+            if start["stt"]["mode"] == "text":
+                reader_task = asyncio.create_task(decisions.update(start["text"]))
+            elif start["stt"]["mode"] == "bundled":
                 reader_task = asyncio.create_task(self.bundled(ws, decisions))
             else:
                 reader_task = asyncio.create_task(self.external(ws, decisions, start))
