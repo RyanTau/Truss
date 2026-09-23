@@ -139,7 +139,7 @@ class TrussCoordinator:
                             probabilities = event.get("probabilities", {})
                             score_updates += 1
                             self.hass.bus.async_fire(EVENT_PROBABILITIES, {"session_id": session_id, "revision": event["revision"], "current_revision": latest_revision, "transcript": event.get("text", ""), "probabilities": probabilities, "score_scope": event.get("score_scope", "legacy_grouped"), "inference_ms": event.get("inference_ms"), "already_fired": gate.claimed})
-                            if candidate := gate.select(probabilities):
+                            if candidate := gate.select(probabilities, latest_text):
                                 # Keep reading partials while the MCP round-trip runs.
                                 action_task = asyncio.create_task(execute(candidate))
                         elif event.get("type") == "error":
@@ -163,6 +163,9 @@ class TrussCoordinator:
                     await asyncio.shield(action_task)
         if gate.claimed:
             result = "action_attempted"
+        elif gate.blocked_reason:
+            result = "execution_blocked"
+            outcome = gate.blocked_reason + " No action was taken."
         elif text is None and not audio_bytes:
             result = "no_audio"
             outcome = "No microphone audio reached Truss. Check microphone access and the Assist audio pipeline."

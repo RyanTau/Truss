@@ -138,6 +138,16 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("1–1000", await self.coordinator.async_text("x" * 1001, "en"))
         self.assertEqual(self.calls, [])
 
+    async def test_high_scores_still_published_for_negations_and_state_questions(self):
+        for text in ("Do not turn on kitchen", "Don't turn on kitchen", "Is kitchen on?", "turn kitchen off"):
+            with self.subTest(text=text):
+                outcome = await self.coordinator.async_text(text, "en")
+                self.assertFalse(outcome.startswith("Requested:"))
+                event = [data for name, data in self.events if name == "truss_probabilities"][-1]
+                self.assertEqual(event["transcript"], text)
+                self.assertEqual(event["probabilities"], {"light.kitchen:on": .99})
+                self.assertEqual(self.calls, [])
+
     async def test_assist_scope_refreshes_exposure_and_filters_domains(self):
         self.coordinator.config.update(entity_mode="assist", entities=["light.old"])
         ids = ["light.kitchen", "switch.desk", "sensor.temperature", "light.hidden"]

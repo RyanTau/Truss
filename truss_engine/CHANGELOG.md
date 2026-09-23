@@ -4,6 +4,7 @@
 - Use one joint Laya distribution with a wait choice; preserve raw action probabilities.
 - Include friendly names, aliases, and rooms in choices, with stable candidate ordering and a larger question token budget.
 - Report `score_scope: joint_actions`. Existing execution thresholds and one-action-per-session behavior remain unchanged.
+- After publishing probabilities, veto execution for recognized negations, state questions, and predictions conflicting with explicit on/off wording. No complete-command or device-name gate remains.
 
 # 0.1.7
 

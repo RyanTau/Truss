@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import re
 from .const import MAX_ENTITIES, SUPPORTED_DOMAINS
 
 
@@ -47,9 +48,19 @@ class DecisionGate:
         self.threshold = threshold
         self.margin = margin
         self.claimed = False
+        self.blocked_reason = None
 
-    def select(self, probabilities: dict):
+    def select(self, probabilities: dict, transcript: str = ""):
         if self.claimed or not isinstance(probabilities, dict):
+            return None
+        self.blocked_reason = None
+        # Execution-only vetoes: probabilities have already been published.
+        # Do not require a full command, a verb, or a device-name match here.
+        if re.search(r"\b(?:not|never|don['’]?t|dont|cancel)\b", transcript, re.I):
+            self.blocked_reason = "The request contains a negation or cancellation."
+            return None
+        if re.match(r"\s*(?:is|are|was|were|what|why|when|where|who|whether)\b", transcript, re.I):
+            self.blocked_reason = "The request asks about a state rather than changing it."
             return None
         # A partial/malformed score vector must not win by hiding competitors.
         if set(probabilities) != set(self.candidates):
@@ -60,6 +71,10 @@ class DecisionGate:
         if not ranked:
             return None
         winner, probability = ranked[0]
+        operations = set(re.findall(r"\b(on|off)\b", transcript.casefold()))
+        if operations and (len(operations) > 1 or winner.rsplit(":", 1)[-1] not in operations):
+            self.blocked_reason = "The predicted action conflicts with the spoken on/off request."
+            return None
         second = ranked[1][1] if len(ranked) > 1 else 0
         if probability < self.threshold or probability - second < self.margin or (len(ranked) > 1 and probability == second):
             return None
