@@ -11,6 +11,7 @@ import aiohttp
 from aiohttp import web
 from .models import LocalModels
 from .jev import JevClient
+from .nemotron import Nemotron
 from .streaming import LiveDecisions
 from . import VERSION, SCORE_SCOPE
 
@@ -60,6 +61,10 @@ class Engine:
         if self.backend not in ("laya", "jev"):
             raise ValueError("decision_backend must be laya or jev")
         self.jev = JevClient(options) if self.backend == "jev" else None
+        self.stt_backend = options.get("stt_backend", "sherpa")
+        if self.stt_backend not in ("sherpa", "nemotron"):
+            raise ValueError("stt_backend must be sherpa or nemotron")
+        self.nemotron = Nemotron(options) if self.stt_backend == "nemotron" and options.get("bundled_stt", True) else None
         self.models = models or LocalModels(options)
         self.inference_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="laya")
         self.audio_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sherpa")
@@ -77,12 +82,17 @@ class Engine:
     async def load(self):
         try:
             await asyncio.get_running_loop().run_in_executor(self.inference_pool, self.models.load)
+            if self.nemotron:
+                await self.nemotron.ready()
             self.ready = True
             LOGGER.info("Truss models are ready")
             LOGGER.info("Decision backend: %s", self.backend)
+            LOGGER.info("Transcription backend: %s", self.stt_backend)
         except Exception as error:
             self.error = type(error).__name__
             LOGGER.error("Model startup failed (%s). Check model cache, network, and memory.", self.error)
+            if self.nemotron:
+                LOGGER.error("Start the Nemotron runtime first; check nemotron_url and /ready. Restart Truss once it is ready.")
 
     async def cleanup(self, app):
         for ws in list(self.sockets):
@@ -95,7 +105,13 @@ class Engine:
         self.audio_pool.shutdown(wait=False, cancel_futures=True)
 
     async def health(self, request):
-        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "score_scope": SCORE_SCOPE, "ready": self.ready, "bundled_stt": self.models.recognizer is not None, "error": self.error, "active_sessions": self.active})
+        ready = self.ready
+        if ready and self.nemotron:
+            try:
+                await self.nemotron.ready()
+            except Exception:
+                ready = False
+        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "stt_backend": self.stt_backend, "score_scope": SCORE_SCOPE, "ready": ready, "bundled_stt": self.nemotron is not None or self.models.recognizer is not None, "error": self.error if ready else self.error or "TranscriptionUnavailable", "active_sessions": self.active})
 
     async def score(self, text, candidates):
         if self.jev:
@@ -128,7 +144,7 @@ class Engine:
             if start["stt"]["mode"] == "text":
                 reader_task = asyncio.create_task(decisions.update(start["text"]))
             elif start["stt"]["mode"] == "bundled":
-                reader_task = asyncio.create_task(self.bundled(ws, decisions))
+                reader_task = asyncio.create_task(self.nemotron.transcribe(ws, decisions, start.get("language", "en")) if self.nemotron else self.bundled(ws, decisions))
             else:
                 reader_task = asyncio.create_task(self.external(ws, decisions, start))
 

@@ -36,6 +36,8 @@ class LocalModels:
         self.agent.cfg.update(head_max_len=64 + 49 * 49, max_len=64 + 49 * 49 + 1024)
 
     def load_transcription(self):
+        if self.options.get("stt_backend", "sherpa") == "nemotron":
+            return  # The native runtime owns this model; never download Zipformer.
         if self.options.get("bundled_stt", True):
             from huggingface_hub import hf_hub_download
             import sherpa_onnx

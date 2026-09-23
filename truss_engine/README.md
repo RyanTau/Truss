@@ -2,6 +2,10 @@
 
 # Truss Engine
 
+Engine 0.1.11 supports local Nemotron streaming ASR. See [Nemotron setup](../docs/NEMOTRON.md)
+for the Windows launcher and Linux/Docker/HA OS configuration. This changes the
+engine only; the existing Home Assistant integration remains compatible.
+
 Run streaming speech recognition with local LAYA or hosted Jev decisions for the Truss Home Assistant integration. It runs as a normal Docker service on Linux; the HA OS app is optional.
 
 For Jev setup without local LAYA, see [Jev configuration](../docs/JEV.md). Jev sends partial transcripts and selected device descriptions to TypeSafe; an API key and internet access are required.

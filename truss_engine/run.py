@@ -33,7 +33,10 @@ def decision_options(options, environment):
     result = dict(options)
     for variable, key in (("TRUSS_DECISION_BACKEND", "decision_backend"),
                           ("TYPESAFE_API_KEY", "typesafe_api_key"),
-                          ("TYPESAFE_MODEL", "jev_model")):
+                          ("TYPESAFE_MODEL", "jev_model"),
+                          ("TRUSS_STT_BACKEND", "stt_backend"),
+                          ("TRUSS_NEMOTRON_URL", "nemotron_url"),
+                          ("TRUSS_NEMOTRON_TOKEN", "nemotron_token")):
         if environment.get(variable):
             result[key] = environment[variable]
     return result

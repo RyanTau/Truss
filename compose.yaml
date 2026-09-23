@@ -15,6 +15,9 @@ services:
       TRUSS_DECISION_BACKEND: ${TRUSS_DECISION_BACKEND:-laya}
       TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
       TYPESAFE_MODEL: ${TYPESAFE_MODEL:-jev-latest}
+      TRUSS_STT_BACKEND: ${TRUSS_STT_BACKEND:-sherpa}
+      TRUSS_NEMOTRON_URL: ${TRUSS_NEMOTRON_URL:-http://host.docker.internal:10351}
+      TRUSS_NEMOTRON_TOKEN: ${TRUSS_NEMOTRON_TOKEN:-}
     volumes:
       # Keeps downloaded models when the container is recreated.
       - truss-models:/data

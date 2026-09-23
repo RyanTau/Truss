@@ -22,6 +22,14 @@ The Truss icon is included in the integration and companion app. Local integrati
 
 Since **0.1.10**, choose hosted **Jev (TypeSafe)** or local **LAYA** in the engine configuration. Jev mode skips loading/downloading LAYA; a lightweight Windows/Docker install also omits LAYA and PyTorch. Jev requires an API key and internet access and sends partial transcripts plus device descriptions to TypeSafe. Transcription still uses your selected provider. See [Jev setup for Windows, Docker, and HA OS](docs/JEV.md).
 
+## Nemotron live transcription
+
+Engine **0.1.11** adds local **Nemotron Speech Streaming 0.6B** as an alternative to
+the original Zipformer recognizer. On Windows, run
+`./scripts/run_engine_windows.ps1 -SttBackend nemotron -Install` to install and
+launch the native runtime alongside Truss. Keep your existing HA integration,
+engine URL, and token. See [Nemotron setup, GPU options, and limitations](docs/NEMOTRON.md).
+
 ## What is included
 
 | Part | Installed where | Responsibility |
