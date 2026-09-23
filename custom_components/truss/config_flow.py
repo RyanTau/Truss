@@ -44,14 +44,34 @@ def engine_schema(defaults):
     })
 
 
-def actions_schema(defaults):
+def selection_schema(defaults):
     return vol.Schema({
         vol.Required("entity_mode", default=defaults.get("entity_mode", "manual" if "entities" in defaults else "assist")): selector.SelectSelector(selector.SelectSelectorConfig(options=[{"value": "assist", "label": "All supported entities exposed to Assist"}, {"value": "areas", "label": "Assist entities in selected rooms"}, {"value": "manual", "label": "Choose individual entities"}])),
-        vol.Optional("areas", default=defaults.get("areas", [])): selector.AreaSelector(selector.AreaSelectorConfig(multiple=True)),
-        vol.Optional("entities", default=defaults.get("entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain=SUPPORTED_DOMAINS, multiple=True)),
+    })
+
+
+def actions_schema(defaults):
+    fields = {}
+    mode = defaults.get("entity_mode", "manual" if "entities" in defaults else "assist")
+    if mode == "areas":
+        fields[vol.Required("areas", default=defaults.get("areas", []))] = selector.AreaSelector(selector.AreaSelectorConfig(multiple=True))
+    elif mode == "manual":
+        fields[vol.Required("entities", default=defaults.get("entities", []))] = selector.EntitySelector(selector.EntitySelectorConfig(domain=SUPPORTED_DOMAINS, multiple=True))
+    fields.update({
         vol.Required("threshold", default=defaults.get("threshold", 0.80)): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1)),
         vol.Required("margin", default=defaults.get("margin", 0.05)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
     })
+    return vol.Schema(fields)
+
+
+def action_settings(defaults, user_input):
+    result = {**defaults, **user_input}
+    # Explicit empty lists also override values retained in config-entry data.
+    if result["entity_mode"] != "areas":
+        result["areas"] = []
+    if result["entity_mode"] != "manual":
+        result["entities"] = []
+    return result
 
 
 class TrussConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -93,18 +113,25 @@ class TrussConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 user_input["engine_url"] = user_input["engine_url"].rstrip("/")
                 self.settings.update(user_input)
-                return await self.async_step_actions()
+                return await self.async_step_selection()
         return self.async_show_form(step_id="engine", data_schema=engine_schema(user_input or self.settings), errors=errors)
+
+    async def async_step_selection(self, user_input=None):
+        if user_input is not None:
+            self.settings.update(user_input)
+            return await self.async_step_actions()
+        return self.async_show_form(step_id="selection", data_schema=selection_schema(self.settings))
 
     async def async_step_actions(self, user_input=None):
         errors = {}
         if user_input is not None:
-            if not 1 <= len(selected_entity_ids(self.hass, user_input)) <= MAX_ENTITIES:
+            proposed = action_settings(self.settings, user_input)
+            if not 1 <= len(selected_entity_ids(self.hass, proposed)) <= MAX_ENTITIES:
                 errors["base"] = "entity_count"
             else:
-                self.settings.update(user_input)
+                self.settings.update(proposed)
                 return self.async_create_entry(title="Truss Live Voice", data=self.settings)
-        return self.async_show_form(step_id="actions", data_schema=actions_schema(user_input or self.settings), errors=errors)
+        return self.async_show_form(step_id="actions", data_schema=actions_schema({**self.settings, **(user_input or {})}), errors=errors)
 
     @staticmethod
     @callback
@@ -113,18 +140,19 @@ class TrussConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class TrussOptionsFlow(config_entries.OptionsFlow):
+    def __init__(self):
+        self.settings = {}
+
     async def async_step_init(self, user_input=None):
         defaults = {**self.config_entry.data, **self.config_entry.options}
         errors = {}
         form_defaults = {**defaults, **(user_input or {})}
         schema = dict(engine_schema(form_defaults).schema)
-        schema.update(actions_schema(form_defaults).schema)
-        schema.update({vol.Required("mcp_url", default=defaults["mcp_url"]): str,
-                       vol.Required("mcp_token", default=defaults["mcp_token"]): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))})
+        schema.update(selection_schema(form_defaults).schema)
+        schema.update({vol.Required("mcp_url", default=form_defaults["mcp_url"]): str,
+                       vol.Required("mcp_token", default=form_defaults["mcp_token"]): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))})
         if user_input is not None:
             try:
-                if not 1 <= len(selected_entity_ids(self.hass, user_input)) <= MAX_ENTITIES:
-                    raise ValueError("entity_count")
                 await check_mcp(self.hass, user_input)
                 await check_engine(self.hass, user_input)
             except ValueError as error:
@@ -133,5 +161,16 @@ class TrussOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "cannot_connect"
             else:
                 user_input["engine_url"] = user_input["engine_url"].rstrip("/")
-                return self.async_create_entry(title="", data=user_input)
+                self.settings = {**defaults, **user_input}
+                return await self.async_step_actions()
         return self.async_show_form(step_id="init", data_schema=vol.Schema(schema), errors=errors)
+
+    async def async_step_actions(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            proposed = action_settings(self.settings, user_input)
+            if not 1 <= len(selected_entity_ids(self.hass, proposed)) <= MAX_ENTITIES:
+                errors["base"] = "entity_count"
+            else:
+                return self.async_create_entry(title="", data=proposed)
+        return self.async_show_form(step_id="actions", data_schema=actions_schema({**self.settings, **(user_input or {})}), errors=errors)

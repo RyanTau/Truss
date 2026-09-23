@@ -126,6 +126,8 @@ Bundled transcription uses streaming beam search with per-session device-name an
 
 ### Updating to 0.1.8
 
+**Integration 0.1.9:** setup and Configure now ask for the device selection mode first. After continuing, only the room picker or individual-entity picker for that mode appears; all-Assist mode shows neither. This is an integration-only update; the engine remains 0.1.8 and does not need updating for this form change. Supported Assist entities are exposed lights, switches, fans, input booleans, scenes, and scripts, with a limit of 24 selected entities. Automatic modes refresh on each command.
+
 Version 0.1.8 removes the pre-inference name/operation gate. Update and restart both the engine and integration. Existing probability thresholds are preserved; the new-install default remains **0.80**. Scores now compare every action together, so the old resolved-action scores are not directly comparable. No new dependencies were added after 0.1.6.
 
 Update **both** the HACS integration and the separate engine, then restart each. HACS does not update the engine. On Windows, stop the engine, run `git pull` in the Truss repository, and run `powershell -NoProfile -File scripts/run_engine_windows.ps1 -Install` to install the new `sentencepiece` dependency and start it. If using your own Cygwin launcher, install `truss_engine/requirements.txt` into its existing Python environment and keep using its existing token/cache configuration. For Docker, run `git pull` followed by `docker compose up -d --build`. The first updated engine start downloads a pinned 245 KB speech tokenizer; subsequent runs reuse the cache. Authenticated `/health` reports `engine_version: 0.1.8` and `score_scope: joint_actions`.

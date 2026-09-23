@@ -23,13 +23,19 @@
       },
       "actions": {
         "title": "Choose devices and execution threshold",
-        "description": "Use supported entities already exposed to Assist, limit them to selected rooms, or choose individual entities. Room selection applies only in room mode; the individual list applies only in manual mode. Automatic modes refresh each utterance. The scope must contain 1–24 entities; fewer entities reduce latency. Expose devices in Settings > Voice assistants > Expose. Actions may execute during speech, once per utterance.",
+        "description": "Select the devices for your chosen mode and set the execution threshold. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
         "data": {
-          "entities": "Allowed entities (manual mode only)",
+          "entities": "Allowed entities",
           "threshold": "Minimum action probability (0.5–1)",
           "margin": "Minimum lead over the next action (0–1)",
-          "entity_mode": "Device selection",
-          "areas": "Rooms (room mode only)"
+          "areas": "Rooms"
+        }
+      },
+      "selection": {
+        "title": "Choose how Truss finds devices",
+        "description": "Choose a device selection mode. The next screen shows only the relevant room or entity picker. All supported Assist entities requires no individual selection.",
+        "data": {
+          "entity_mode": "Device selection"
         }
       }
     },
@@ -46,7 +52,7 @@
     "step": {
       "init": {
         "title": "Configure Truss Live Voice",
-        "description": "Changing settings reconnects Truss and stops active sessions. Use supported entities already exposed to Assist, limit them to selected rooms, or choose individual entities. Room selection applies only in room mode; the individual list applies only in manual mode. Automatic modes refresh each utterance. The scope must contain 1–24 entities; fewer entities reduce latency. Expose devices in Settings > Voice assistants > Expose. Actions may execute during speech, once per utterance.",
+        "description": "Changing settings reconnects Truss and stops active sessions. Choose the device selection mode here, then continue to its room or entity picker and probability settings.",
         "data": {
           "mcp_url": "MCP server URL",
           "mcp_token": "Home Assistant access token",
@@ -55,11 +61,17 @@
           "stt_mode": "Live transcription provider",
           "stt_url": "External STT WebSocket URL",
           "stt_token": "External STT token",
-          "entities": "Allowed entities (manual mode only)",
-          "threshold": "Minimum action probability",
-          "margin": "Minimum lead over next action",
-          "entity_mode": "Device selection",
-          "areas": "Rooms (room mode only)"
+          "entity_mode": "Device selection"
+        }
+      },
+      "actions": {
+        "title": "Choose devices and execution threshold",
+        "description": "Select the devices for your chosen mode and set the execution threshold. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
+        "data": {
+          "entities": "Allowed entities",
+          "threshold": "Minimum action probability (0.5–1)",
+          "margin": "Minimum lead over the next action (0–1)",
+          "areas": "Rooms"
         }
       }
     },
