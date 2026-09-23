@@ -1,6 +1,6 @@
 # Truss streaming protocol v1
 
-Since 0.1.7, text clients may send a normal start message with `stt: {"mode": "text"}` and a top-level `text` string of 1–1000 characters. Keep `sample_rate: 16000` for envelope compatibility. Do not send audio or an end message. The engine bypasses transcription and emits partial, probabilities, and done using the same decision path. Name resolution now allows close misspellings and unique shortened names; `resolved_action` scores remain conditional on that resolution.
+Since 0.1.7, text clients may send a normal start message with `stt: {"mode": "text"}` and a top-level `text` string of 1–1000 characters. Keep `sample_rate: 16000` for envelope compatibility. Do not send audio or an end message. The engine bypasses transcription and emits partial, probabilities, and done using the same decision path. Since 0.1.8, both typed and live voice inputs use the joint scoring described below.
 
 There are two different WebSocket roles. Neither is an OpenAI-compatible audio upload API, Ollama endpoint, nor a Wyoming TCP endpoint.
 
@@ -18,7 +18,7 @@ For external transcription, `stt` is `{"mode":"external","url":"ws://host:port/p
 
 Send binary frames containing **raw signed 16-bit little-endian mono PCM, 16 kHz**, not WAV headers. Send `{"type":"end"}` after the audio. Sessions are limited to 60 seconds of audio, 75 seconds wall time, 48 concrete candidates, and two concurrent clients.
 
-In 0.1.6, candidate IDs follow `entity_id:on` or `entity_id:off` (scene/script activation uses `on`). Optional `name` supplies the friendly name; older clients fall back to the label with its operation prefix removed. Names and aliases provide per-session bundled-ASR hints. The engine resolves one explicit device and operation, then Laya confirms that action against wait. In `score_scope: resolved_action`, only the resolved action can have a nonzero probability; other zeros mean ineligible. If resolution fails, all scores are zero and no Laya forward pass is needed. The eligible action's score is the model's conditional execute probability, not a global device-choice distribution. It is not renormalized or boosted. The omitted wait choice retains the remaining mass. Original transcript text is preserved in events; inference casing is standardized to uppercase. `/health` includes `engine_version` and `score_scope`.
+In 0.1.8, candidate IDs follow `entity_id:on` or `entity_id:off` (scene/script activation uses `on`). Optional `name` supplies the friendly name; older clients fall back to the label. Names and aliases provide per-session bundled-ASR hints and natural-language choice labels. Every nonempty partial goes directly to Laya with all candidate actions plus wait in one choice question. The question budget accommodates all 48 actions plus wait; the pinned Laya library limits each option text to 48 tokens. `score_scope: joint_actions` means raw model action probabilities with the wait choice omitted from the returned map, not zero-filled eligibility scores. Probabilities can round to zero; no smoothing or boosting is applied. The original transcript remains in events and inference casing is standardized to uppercase. `/health` includes `engine_version` and `score_scope`. Earlier `resolved_action` and `legacy_grouped` score semantics are obsolete.
 
 Server messages:
 

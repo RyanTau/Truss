@@ -1,5 +1,5 @@
 name: Truss Local Engine
-version: "0.1.7"
+version: "0.1.8"
 slug: truss_engine
 description: Streaming speech recognition and local Laya action probabilities
 arch:

@@ -21,7 +21,7 @@ class RecordingAgent:
 
     def predict(self, text, questions):
         self.calls.append((text, questions))
-        return {"answers": {"action": {"probabilities": {"wait": .03, "execute": .97}}}}
+        return {"answers": {"action": {"probabilities": {key: 1 / len(questions["action"]["criteria"]) for key in questions["action"]["criteria"]}}}}
 
 
 class ModelAdapterTests(unittest.TestCase):
@@ -30,67 +30,44 @@ class ModelAdapterTests(unittest.TestCase):
         self.models.agent = RecordingAgent()
         self.candidates = lamp_candidates()
 
-    def test_named_device_and_operation_are_only_eligible_action(self):
-        for text, winner in (("Turn the tall lamp on", "light.tall:on"),
-                             ("Turn off the Turkish lamp", "light.ball:off"),
-                             ("Turn off the color light", "light.colour:off")):
-            with self.subTest(text=text):
-                scores = self.models.score(text, self.candidates)
-                self.assertEqual(set(scores), {c["id"] for c in self.candidates})
-                self.assertEqual(scores[winner], .97)
-                self.assertEqual(sum(scores.values()), .97)
-        self.assertEqual(len(self.models.agent.calls), 3)
-        self.assertEqual(self.models.agent.calls[1][1]["action"]["criteria"]["execute"], "Turn off Turkish lamp")
+    def test_every_partial_reaches_laya_and_scores_all_actions(self):
+        for text in ("Turn", "Turn on", "Turn on the tal", "Turn on the tall lamp",
+                     "Do not turn on the tall lamp", "Is the tall lamp on?"):
+            scores = self.models.score(text, self.candidates)
+            self.assertEqual(set(scores), {c["id"] for c in self.candidates})
+            self.assertTrue(all(score > 0 for score in scores.values()))
+        self.assertEqual(len(self.models.agent.calls), 6)
+        self.assertEqual(self.models.agent.calls[0][0], "TURN")
+        question = self.models.agent.calls[0][1]["action"]
+        self.assertEqual(len(question["criteria"]), len(self.candidates) + 1)
+        self.assertIn("wait", question["criteria"])
+        self.assertTrue(any("lamp" in key for key in question["criteria"]))
 
-    def test_abstains_on_incomplete_unknown_negated_and_multiple_targets(self):
-        for text in ("Turn on", "Tall lamp", "TURN OFF THE COLORED LION",
-                     "Do not turn on the tall lamp", "Don't turn on the tall lamp",
-                     "Turn the tall lamp on and off", "Turn on the tall lamp and ball lamp",
-                     "Is the tall lamp on?", "Turn on the tall lamppost"):
-            with self.subTest(text=text):
-                self.assertFalse(any(self.models.score(text, self.candidates).values()))
-        self.assertEqual(self.models.agent.calls, [])
+    def test_order_stable_and_one_distribution_even_at_limit(self):
+        original = self.models.score("Turn", self.candidates)
+        self.assertEqual(original, self.models.score("Turn", list(reversed(self.candidates))))
+        self.assertEqual(self.models.agent.calls[0][1], self.models.agent.calls[1][1])
+        candidates = [{"id": f"light.lamp{i}:on", "entity_id": f"light.lamp{i}", "label": f"Turn on lamp {i}"} for i in range(48)]
+        self.assertEqual(len(self.models.score("Turn", candidates)), 48)
+        self.assertEqual(len(self.models.agent.calls[-1][1]["action"]["criteria"]), 49)
 
-    def test_typoes_short_names_and_casual_commands(self):
-        for text, winner in (("turksih lamp off please", "light.ball:off"),
-                             ("could you put the tal lamp on please", "light.tall:on"),
-                             ("THUNDER TALL LAMP ON", "light.tall:on"),
-                             ("colored light off", "light.colour:off"),
-                             ("stop the tall lamp", "light.tall:off")):
-            with self.subTest(text=text):
-                self.assertEqual(self.models.score(text, self.candidates)[winner], .97)
-        for c in self.candidates:
-            c["aliases"] = []
-        self.assertEqual(self.models.score("tall lamp on", self.candidates)["light.tall:on"], .97)
-        # A typo that is equally close to two devices must not choose either.
-        self.assertFalse(any(self.models.score("turn on the wall lamp", self.candidates).values()))
+    def test_raw_probabilities_not_zeroed_or_renormalized(self):
+        def predict(text, questions):
+            return {"answers": {"action": {"probabilities": {
+                key: .7 if key == "wait" else .05 for key in questions["action"]["criteria"]
+            }}}}
+        self.models.agent.predict = predict
+        scores = self.models.score("Turn", self.candidates)
+        self.assertTrue(all(score == .05 for score in scores.values()))
+        self.assertAlmostEqual(sum(scores.values()), .3)
 
-    def test_shared_alias_abstains(self):
-        for c in self.candidates:
-            c["aliases"] = ["My lamp"]
-        self.assertFalse(any(self.models.score("Turn on my lamp", self.candidates).values()))
-        self.assertEqual(self.models.agent.calls, [])
-
-    def test_choice_does_not_depend_on_candidate_order_or_unrelated_devices(self):
-        original = self.models.score("Turn off the tall lamp", self.candidates)
-        reversed_scores = self.models.score("Turn off the tall lamp", list(reversed(self.candidates)))
-        extra = {"id": "switch.other:on", "entity_id": "switch.other", "name": "Desk fan", "label": "Turn on Desk fan"}
-        extended = self.models.score("Turn off the tall lamp", [extra, *self.candidates])
-        self.assertEqual(original, reversed_scores)
-        self.assertEqual(original, {key: extended[key] for key in original})
-        self.assertEqual(self.models.agent.calls[0][1], self.models.agent.calls[2][1])
-
-    def test_scene_and_script_activation(self):
-        for domain in ("scene", "script"):
-            c = {"id": f"{domain}.movie:on", "entity_id": f"{domain}.movie", "label": "Activate Movie mode"}
-            self.assertEqual(self.models.score("Activate movie mode", [c])[c["id"]], .97)
-            self.assertEqual(self.models.score("Turn off movie mode", [c])[c["id"]], 0)
-            self.assertEqual(self.models.score("Activate movie mode and turn it off", [c])[c["id"]], 0)
-
-    def test_probability_is_not_renormalized_to_force_an_action(self):
-        self.models.agent.predict = lambda *args: {"answers": {"action": {"probabilities": {"wait": .7, "execute": .3}}}}
-        scores = self.models.score("Turn off the colour light", self.candidates)
-        self.assertEqual(scores["light.colour:off"], .3)
+    def test_duplicate_names_remain_separate_choices(self):
+        for candidate in self.candidates:
+            candidate["name"] = "Lamp"
+            candidate["aliases"] = []
+        scores = self.models.score("lamp on", self.candidates)
+        self.assertEqual(len(scores), 6)
+        self.assertEqual(len(self.models.agent.calls[-1][1]["action"]["criteria"]), 7)
 
     def test_hotwords_are_deduplicated_and_do_not_accept_control_syntax(self):
         class Tokenizer:

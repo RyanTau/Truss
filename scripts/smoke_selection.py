@@ -28,7 +28,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     models = LocalModels({"bundled_stt": bool(args.audio_dir), "threads": 4})
     models.load()
-    for text in ("Turn the tall lamp on", "THUNDER TALL LAMP ON", "Turn off the tall lamp",
+    for text in ("Turn", "Turn on", "Turn on the", "Turn on the tall", "Turn on the tall lamp", "Turn the tall lamp on", "THUNDER TALL LAMP ON", "Turn off the tall lamp",
                  "Turn on the Turkish lamp", "Turn off the Turkish lamp", "Turn off the colour light",
                  "TURN OFF THE COLORED LION", "Turn on", "Do not turn on the tall lamp",
                  "turksih lamp off please", "could you put the tal lamp on please",

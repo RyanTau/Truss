@@ -108,6 +108,29 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.calls), 1)
         self.assertFalse(self.coordinator.receipts)
 
+    async def test_partial_scores_flow_before_audio_ends_below_threshold(self):
+        received = asyncio.Event()
+        transcripts = iter(["Turn", "Turn on", "Turn on kitchen"])
+        engine = self.engine_app["engine"]
+        engine.models.transcribe = lambda *args: next(transcripts)
+        engine.models.score = lambda text, candidates: {c["id"]: {"Turn": .1, "Turn on": .3, "Turn on kitchen": .7}[text] for c in candidates}
+        def fire(name, data):
+            self.events.append((name, data))
+            if name == "truss_probabilities":
+                received.set()
+        self.hass.bus.async_fire = fire
+        async def audio():
+            for _ in range(2):
+                received.clear()
+                yield bytes(2560)
+                await asyncio.wait_for(received.wait(), 3)
+                self.assertEqual(self.calls, [])
+        await asyncio.wait_for(self.coordinator.async_stream(audio(), "en"), 5)
+        scores = [data for name, data in self.events if name == "truss_probabilities"]
+        self.assertEqual([data["transcript"] for data in scores], ["Turn", "Turn on", "Turn on kitchen"])
+        self.assertEqual([next(iter(data["probabilities"].values())) for data in scores], [.1, .3, .7])
+        self.assertEqual(self.calls, [])
+
     async def test_text_below_threshold_and_invalid_text(self):
         self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: .4 for c in candidates}
         self.assertIn("No action reached", await self.coordinator.async_text("kitchen on", "en"))

@@ -1,3 +1,10 @@
+# 0.1.8
+
+- Score every available action on each nonempty partial transcript, without deterministic name or operation filtering.
+- Use one joint Laya distribution with a wait choice; preserve raw action probabilities.
+- Include friendly names, aliases, and rooms in choices, with stable candidate ordering and a larger question token budget.
+- Report `score_scope: joint_actions`. Existing execution thresholds and one-action-per-session behavior remain unchanged.
+
 # 0.1.7
 
 - Accept typed commands through Truss Response without initializing transcription.

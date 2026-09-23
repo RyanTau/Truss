@@ -1,7 +1,7 @@
 """Load local models once; inference is called on dedicated worker threads."""
 from pathlib import Path
 import tempfile
-from .names import hotword_text, resolve_action
+from .names import hotword_text, action_label
 SHERPA_REPO = "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26"
 SHERPA_REVISION = "672fbf1"
 SUFFIX = "epoch-99-avg-1-chunk-16-left-64.int8.onnx"
@@ -25,6 +25,10 @@ class LocalModels:
             # Avoid downloading the bundled multilingual/typed checkpoints.
             model_dir = snapshot_download("convaiinnovations/laya", revision="1c5edc1", allow_patterns=["model.safetensors", "rl_agent_config.json", "tokenizer/*", "encoder/*.json"])
         self.agent = Agent(model_dir, device=self.options.get("device", "cpu"))
+        # Laya defaults to a 192-token question head, which truncates larger
+        # device lists. Allow every option's 48-token description plus markers,
+        # instructions, and the full (at most 1000-character) partial transcript.
+        self.agent.cfg.update(head_max_len=64 + 49 * 49, max_len=64 + 49 * 49 + 1024)
         if self.options.get("bundled_stt", True):
             import sherpa_onnx
             import sentencepiece
@@ -45,27 +49,28 @@ class LocalModels:
                 )
 
     def score(self, text, candidates):
-        # Resolve the explicit target before asking Laya about its actions. This
-        # avoids both cross-group score comparisons and high-confidence guesses
-        # about an unrelated device. Zeroes mean ineligible, not model estimates.
-        probabilities = {c["id"]: 0.0 for c in candidates}
-        resolved = resolve_action(text, candidates)
-        if resolved is None:
-            return probabilities
-        candidate, spoken_name = resolved
-        operation = candidate["id"].rsplit(":", 1)[-1]
-        verb = "Activate" if candidate["entity_id"].split(".")[0] in ("scene", "script") else "Turn " + operation
-        criteria = {"wait": "Wait for a command", "execute": verb + " " + spoken_name}
+        # One shared distribution for every partial, with no name/verb prefilter
+        # and no separately normalized groups. Stable order also avoids registry
+        # ordering changes altering the question between otherwise equal runs.
+        ordered = sorted(candidates, key=lambda candidate: (candidate["entity_id"], candidate["id"].endswith(":off")))
+        labels = [action_label(text, candidate) for candidate in ordered]
+        criteria = {"wait": "No requested action yet"}
+        mapping = {}
+        for candidate, label in zip(ordered, labels):
+            key = label
+            if labels.count(label) > 1:
+                key += " (" + candidate.get("area", "") + "; " + candidate["id"] + ")"
+            criteria[key] = None
+            mapping[key] = candidate["id"]
         questions = {"action": {
             "type": "choice",
-            "instructions": "Does the user want this action? Ignore spelling errors and polite filler words.",
+            "instructions": "Which action does the user explicitly request? Select wait if the command is incomplete, ambiguous, negated, or no listed action is requested.",
             "criteria": criteria,
         }}
         # Bundled ASR emits uppercase. Keep external providers' capitalization
         # from changing the decision for the same words.
         scores = self.agent.predict(text.upper(), questions)["answers"]["action"]["probabilities"]
-        probabilities[candidate["id"]] = scores["execute"]
-        return probabilities
+        return {candidate_id: scores[key] for key, candidate_id in mapping.items()}
 
     def create_stream(self, candidates=None):
         if self.recognizer is None:

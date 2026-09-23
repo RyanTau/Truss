@@ -97,7 +97,7 @@ class MCPClient:
             return await self._post({"jsonrpc": "2.0", "id": self.counter, "method": method, "params": params})
 
     async def initialize(self):
-        result = await self.request("initialize", {"protocolVersion": self.protocol, "capabilities": {}, "clientInfo": {"name": "truss", "version": "0.1.7"}})
+        result = await self.request("initialize", {"protocolVersion": self.protocol, "capabilities": {}, "clientInfo": {"name": "truss", "version": "0.1.8"}})
         self.protocol = result.get("protocolVersion", self.protocol)
         await self._post({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
