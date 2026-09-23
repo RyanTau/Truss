@@ -2,6 +2,8 @@ services:
   truss-engine:
     build:
       context: ./truss_engine
+      args:
+        DECISION_BACKEND: ${TRUSS_DECISION_BACKEND:-laya}
     container_name: truss-engine
     restart: unless-stopped
     ports:
@@ -10,6 +12,9 @@ services:
       # Optional: set this in .env to choose your own persistent token.
       # Otherwise the engine creates one on first start and prints it once.
       TRUSS_API_TOKEN: ${TRUSS_API_TOKEN:-}
+      TRUSS_DECISION_BACKEND: ${TRUSS_DECISION_BACKEND:-laya}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      TYPESAFE_MODEL: ${TYPESAFE_MODEL:-jev-latest}
     volumes:
       # Keeps downloaded models when the container is recreated.
       - truss-models:/data

@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 import aiohttp
 from aiohttp import web
 from .models import LocalModels
+from .jev import JevClient
 from .streaming import LiveDecisions
 from . import VERSION, SCORE_SCOPE
 
@@ -55,6 +56,10 @@ def validate_start(start):
 class Engine:
     def __init__(self, options, models=None):
         self.options = options
+        self.backend = options.get("decision_backend", "laya")
+        if self.backend not in ("laya", "jev"):
+            raise ValueError("decision_backend must be laya or jev")
+        self.jev = JevClient(options) if self.backend == "jev" else None
         self.models = models or LocalModels(options)
         self.inference_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="laya")
         self.audio_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sherpa")
@@ -65,6 +70,8 @@ class Engine:
         self.load_task = None
 
     async def startup(self, app):
+        if self.jev:
+            await self.jev.start()
         self.load_task = asyncio.create_task(self.load())
 
     async def load(self):
@@ -72,6 +79,7 @@ class Engine:
             await asyncio.get_running_loop().run_in_executor(self.inference_pool, self.models.load)
             self.ready = True
             LOGGER.info("Truss models are ready")
+            LOGGER.info("Decision backend: %s", self.backend)
         except Exception as error:
             self.error = type(error).__name__
             LOGGER.error("Model startup failed (%s). Check model cache, network, and memory.", self.error)
@@ -81,13 +89,17 @@ class Engine:
             await ws.close(code=1001, message=b"Engine stopping")
         if self.load_task:
             await asyncio.gather(self.load_task, return_exceptions=True)
+        if self.jev:
+            await self.jev.close()
         self.inference_pool.shutdown(wait=False, cancel_futures=True)
         self.audio_pool.shutdown(wait=False, cancel_futures=True)
 
     async def health(self, request):
-        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "score_scope": SCORE_SCOPE, "ready": self.ready, "bundled_stt": self.models.recognizer is not None, "error": self.error, "active_sessions": self.active})
+        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "score_scope": SCORE_SCOPE, "ready": self.ready, "bundled_stt": self.models.recognizer is not None, "error": self.error, "active_sessions": self.active})
 
     async def score(self, text, candidates):
+        if self.jev:
+            return await self.jev.score(text, candidates)
         return await asyncio.get_running_loop().run_in_executor(self.inference_pool, self.models.score, text, candidates)
 
     async def audio(self, stream, pcm, final=False):
@@ -109,6 +121,7 @@ class Engine:
             async def emit(event):
                 if event.get("type") == "probabilities":
                     event["score_scope"] = SCORE_SCOPE
+                    event["decision_backend"] = self.backend
                 await ws.send_json(event)
             decisions = LiveDecisions(self.score, emit, candidates)
             decisions_task = asyncio.create_task(decisions.run())

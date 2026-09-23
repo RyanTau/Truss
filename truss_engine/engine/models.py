@@ -15,8 +15,13 @@ class LocalModels:
         self.speech_tokenizer = None
 
     def load(self):
+        if self.options.get("decision_backend", "laya") == "laya":
+            self.load_laya()
+        self.load_transcription()
+
+    def load_laya(self):
         import torch
-        from huggingface_hub import snapshot_download, hf_hub_download
+        from huggingface_hub import snapshot_download
         from laya import Agent
 
         torch.set_num_threads(int(self.options.get("threads", 4)))
@@ -29,7 +34,10 @@ class LocalModels:
         # device lists. Allow every option's 48-token description plus markers,
         # instructions, and the full (at most 1000-character) partial transcript.
         self.agent.cfg.update(head_max_len=64 + 49 * 49, max_len=64 + 49 * 49 + 1024)
+
+    def load_transcription(self):
         if self.options.get("bundled_stt", True):
+            from huggingface_hub import hf_hub_download
             import sherpa_onnx
             import sentencepiece
             files = {key: hf_hub_download(SHERPA_REPO, filename=f"{key}-{SUFFIX}", revision=SHERPA_REVISION) for key in ("encoder", "decoder", "joiner")}

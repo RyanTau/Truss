@@ -1,3 +1,11 @@
+# 0.1.10
+
+- Add hosted Jev (TypeSafe) as an optional decision backend for live partials and typed commands.
+- Jev mode skips all local LAYA imports/model downloads; provide a lightweight Windows/Compose installation without LAYA or PyTorch.
+- Add engine backend/model health fields and backend labels on probability events.
+- Validate hosted probability responses and fail closed on API errors without automatic retries or fallback.
+- Configure `decision_backend`, `typesafe_api_key`, and `jev_model` in engine settings or corresponding environment variables. See the repository's `docs/JEV.md` for setup and data sent to TypeSafe.
+
 # 0.1.8
 
 - Score every available action on each nonempty partial transcript, without deterministic name or operation filtering.

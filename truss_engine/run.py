@@ -29,11 +29,22 @@ def engine_token(options, token_file, environment_token=""):
         return token_file.read_text(encoding="utf-8").strip(), False
 
 
+def decision_options(options, environment):
+    result = dict(options)
+    for variable, key in (("TRUSS_DECISION_BACKEND", "decision_backend"),
+                          ("TYPESAFE_API_KEY", "typesafe_api_key"),
+                          ("TYPESAFE_MODEL", "jev_model")):
+        if environment.get(variable):
+            result[key] = environment[variable]
+    return result
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     default_data = Path("/data") if Path("/data").is_dir() else Path(__file__).resolve().parent / "data"
     options_file = Path(os.environ.get("TRUSS_OPTIONS", default_data / "options.json"))
     options = json.loads(options_file.read_text()) if options_file.exists() else {}
+    options = decision_options(options, os.environ)
     token_file = Path(os.environ.get("TRUSS_TOKEN_FILE", options_file.parent / "truss_engine_token"))
     token, created = engine_token(options, token_file, os.environ.get("TRUSS_API_TOKEN", ""))
     options["api_token"] = token

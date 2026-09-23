@@ -1,7 +1,7 @@
 name: Truss Local Engine
-version: "0.1.8"
+version: "0.1.10"
 slug: truss_engine
-description: Streaming speech recognition and local Laya action probabilities
+description: Streaming speech recognition with local Laya or hosted Jev decisions
 arch:
   - amd64
   - aarch64
@@ -19,10 +19,16 @@ options:
   threads: 4
   device: cpu
   laya_model_path: ""
+  decision_backend: laya
+  typesafe_api_key: ""
+  jev_model: jev-latest
 schema:
   api_token: password
   bundled_stt: bool
   threads: int(1,16)
   device: list(cpu)
   laya_model_path: str?
+  decision_backend: list(laya|jev)
+  typesafe_api_key: password
+  jev_model: str
 url: https://github.com/RyanTau/Truss

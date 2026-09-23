@@ -2,7 +2,9 @@
 
 # Truss Engine
 
-Run streaming speech recognition and Laya locally for the Truss Home Assistant integration. It runs as a normal Docker service on Linux; the HA OS app is optional.
+Run streaming speech recognition with local LAYA or hosted Jev decisions for the Truss Home Assistant integration. It runs as a normal Docker service on Linux; the HA OS app is optional.
+
+For Jev setup without local LAYA, see [Jev configuration](../docs/JEV.md). Jev sends partial transcripts and selected device descriptions to TypeSafe; an API key and internet access are required.
 
 ## Linux / Home Assistant Container
 

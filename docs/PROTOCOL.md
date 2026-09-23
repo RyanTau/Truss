@@ -1,5 +1,7 @@
 # Truss streaming protocol v1
 
+Since 0.1.10, the engine can use local LAYA or hosted Jev. Configure the backend on the engine, not in the session start. Authenticated `/health` reports `decision_backend` and `decision_model`; probability messages carry `decision_backend`. Both backends return the full allowed action map using `score_scope: joint_actions`. No provider key is exposed through these endpoints. Jev validates its complete choice distribution (including wait) before forwarding raw action scores. See [Jev configuration](JEV.md).
+
 Since 0.1.7, text clients may send a normal start message with `stt: {"mode": "text"}` and a top-level `text` string of 1–1000 characters. Keep `sample_rate: 16000` for envelope compatibility. Do not send audio or an end message. The engine bypasses transcription and emits partial, probabilities, and done using the same decision path. Since 0.1.8, both typed and live voice inputs use the joint scoring described below.
 
 There are two different WebSocket roles. Neither is an OpenAI-compatible audio upload API, Ollama endpoint, nor a Wyoming TCP endpoint.

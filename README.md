@@ -2,7 +2,7 @@
 
 # Truss Live Voice for Home Assistant
 
-**Act while you speak.** Truss streams Assist microphone audio to a local engine, updates Laya's action probabilities on each changed partial transcript, and calls Home Assistant's MCP tools as soon as an action crosses your threshold. There is no separate web UI.
+**Act while you speak.** Truss streams Assist microphone audio to a local engine, updates the selected model's action probabilities on each changed partial transcript, and calls Home Assistant's MCP tools as soon as an action crosses your threshold. There is no separate web UI.
 
 **Experimental development release:** transport tests and a real offline Laya/ASR smoke test pass, including live probabilities during audio. However, the real test also exposed missed commands and transcription errors: this is **not yet a reliable everyday voice controller**. A real HA installation, physical satellite, and container builds remain untested. See [measured results and limitations](docs/VALIDATION.md).
 
@@ -18,17 +18,21 @@ The **first badge configures an already installed integration**; it does not dow
 
 The Truss icon is included in the integration and companion app. Local integration branding requires **HA 2026.3+**; HA 2026.1/2026.2 and some HACS listing views may still show a placeholder. The minimum HA version remains **2026.1.0**. See [icon support and installation details](docs/BRANDING.md).
 
+## Jev instead of LAYA
+
+Since **0.1.10**, choose hosted **Jev (TypeSafe)** or local **LAYA** in the engine configuration. Jev mode skips loading/downloading LAYA; a lightweight Windows/Docker install also omits LAYA and PyTorch. Jev requires an API key and internet access and sends partial transcripts plus device descriptions to TypeSafe. Transcription still uses your selected provider. See [Jev setup for Windows, Docker, and HA OS](docs/JEV.md).
+
 ## What is included
 
 | Part | Installed where | Responsibility |
 | --- | --- | --- |
 | `custom_components/truss` | HA Core through HACS or manual copy | Native configuration, MCP autodetection/validation, entity selection, streaming STT bridge, execution, Assist response |
-| `truss_engine` | Linux Docker service beside HA, or optional HA OS app | Local streaming sherpa-onnx transcription and local Laya inference |
+| `truss_engine` | Linux Docker service beside HA, or optional HA OS app | Local streaming sherpa-onnx transcription with local LAYA or hosted Jev decisions |
 
 ```text
 Assist microphone → Truss Live STT → streamed PCM audio → Truss engine
                                                         ├─ local ASR or external streaming STT
-                                                        └─ partial transcript → local Laya
+                                                        └─ partial transcript → LAYA or Jev
                          HA integration ← probabilities ←───────────┘
                               ↓ threshold met (before speech ends)
                          HA MCP server → device action
@@ -42,7 +46,7 @@ The engine never receives your HA access token. The integration executes fixed, 
 - HA's official **Model Context Protocol Server**, with **Assist API** selected and **Control Home Assistant** enabled.
 - A long-lived access token for the **same HA instance**. MCP autodetection suggests the existing HA URL; it does not generate credentials or scan the network.
 - A computer running the Truss engine, or HA OS with the companion app installed. Python 3.12 is used in the container. Packaged inference uses CPU.
-- Space for PyTorch, Laya, the transcription model, and cache. Pinned model files total about 0.92 GB; reserve several GB for the full installation and benchmark RAM/CPU on your machine. Initial startup downloads model files; subsequent inference is local.
+- For local LAYA: space for PyTorch, Laya, the transcription model, and cache. Pinned model files total about 0.92 GB; reserve several GB for the full installation and benchmark RAM/CPU on your machine. Initial startup downloads model files; subsequent inference is local.
 
 ## Installation: Home Assistant on Linux
 
@@ -109,18 +113,18 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
    - Text-to-speech: your existing provider, e.g. Piper.
 7. Assign that assistant to your voice device and speak a supported request.
 
-For streaming voice, select both Truss entities together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. You can also type commands into Assist with **Truss Response** selected: text goes directly to Laya without transcription. Another STT provider can supply completed text to Truss Response, but that path cannot act during speech.
+For streaming voice, select both Truss entities together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. You can also type commands into Assist with **Truss Response** selected: text goes directly to the selected decision backend without transcription. Another STT provider can supply completed text to Truss Response, but that path cannot act during speech.
 
 ## Supported commands in 0.1.8
 
 - Turn **lights, switches, fans, and input booleans** on/off.
 - Activate **scenes and scripts**.
-- Say or type a device name or Assist alias and the action you want. Laya scores every available action on every nonempty partial transcript, including incomplete phrases such as **turn on the**. No exact-name, fuzzy-match cutoff, or command-verb rule filters the scores.
+- Say or type a device name or Assist alias and the action you want. The selected backend scores every available action on every nonempty partial transcript, including incomplete phrases such as **turn on the**. No exact-name, fuzzy-match cutoff, or command-verb rule filters the scores.
 - **One action per utterance**, including at most one attempt if MCP times out. No automatic retry of a possibly executed action.
 
 Brightness, temperature, covers, timers, multi-action commands, and implicit “this room” resolution are not implemented. The STT entity interface does not supply the satellite's device ID to this bridge; name the device explicitly. Add broader parameter extraction and intent mappings as separate work. MCP tool names and schemas are discovered, not assumed to accept arbitrary service calls.
 
-The engine asks Laya to choose among all available actions plus `wait` in one shared distribution. The `truss_probabilities` event contains the raw score for every action; omitted probability mass belongs to wait (subject to model rounding). There is no deterministic target resolution, zeroing of other actions, score smoothing, or separate group normalization. `score_scope: joint_actions` identifies this behavior. A friendly name or alias is chosen to label each option using the current words; this never removes an action from consideration. Identical action labels are disambiguated with room and entity ID. Your threshold, lead margin, and one-action-per-session limit still control execution. After publishing scores, execution-only checks veto recognized negations, state questions, and winners conflicting with explicit on/off wording. These checks do not require a completed command or matched device name, and never alter the emitted probabilities.
+The engine asks LAYA or Jev to choose among all available actions plus `wait` in one shared distribution. The `truss_probabilities` event contains the raw score for every action; omitted probability mass belongs to wait (subject to model rounding). There is no deterministic target resolution, zeroing of other actions, score smoothing, or separate group normalization. `score_scope: joint_actions` identifies this behavior. For LAYA, a friendly name or alias is chosen to label each option using the current words; this never removes an action from consideration. Identical action labels are disambiguated with room and entity ID. Your threshold, lead margin, and one-action-per-session limit still control execution. After publishing scores, execution-only checks veto recognized negations, state questions, and winners conflicting with explicit on/off wording. These checks do not require a completed command or matched device name, and never alter the emitted probabilities.
 
 Bundled transcription uses streaming beam search with per-session device-name and alias hints. Recognition errors and incomplete speech are sent to Laya as they arrive. Model scores may rise or fall and may round to zero naturally. If inference falls behind, intermediate partials are coalesced so the latest transcript is processed next. Scores are model estimates, not correctness guarantees; an action may fire before a later spoken correction.
 
@@ -136,7 +140,7 @@ In Home Assistant, add the names you actually speak under **Settings → Voice a
 
 ## External transcription, Whisper, and Ollama
 
-External STT must return **partial transcripts while audio is still arriving**. Supported protocols are the native sherpa-onnx streaming server and [the Truss streaming protocol](docs/PROTOCOL.md). Laya still runs locally in the Truss engine. The engine connects to the STT URL, so that address must be reachable from the app/container.
+External STT must return **partial transcripts while audio is still arriving**. Supported protocols are the native sherpa-onnx streaming server and [the Truss streaming protocol](docs/PROTOCOL.md). Decision scoring uses your configured LAYA or Jev backend. The engine connects to the STT URL, so that address must be reachable from the app/container.
 
 - The bundled **sherpa-onnx streaming Zipformer** is the immediately supported live transcription option. It downloads quantized model files, reuses a loaded recognizer, and keeps a separate stream per utterance.
 - For an existing server, select **External sherpa-onnx streaming server**. This adapter implements the official [sherpa-onnx streaming server protocol](https://github.com/k2-fsa/sherpa-onnx/blob/master/python-api-examples/streaming_server.py), converting audio to float32 and joining transcript segments. Configure the server for 16 kHz English recognition. A Bearer token can authenticate a reverse proxy; the upstream example server itself does not enforce tokens.
@@ -176,6 +180,8 @@ In **Developer tools → Events**, listen to:
 
 ## Development and checks
 
+Install test dependencies (`aiohttp` and `voluptuous`) in your development environment.
+
 ```sh
 python -m unittest discover -s tests -v
 python scripts/check_package.py
@@ -203,4 +209,4 @@ This replaces metadata URLs, sets the GitHub code owner, and adds working HACS/a
 - [External STT / engine protocol](docs/PROTOCOL.md)
 - [Release verification checklist](docs/RELEASE.md)
 
-No core patches, browser automation, cloud LLM calls, or standalone dashboard are involved.
+No core patches, browser automation, or standalone dashboard are involved. Hosted inference is used only when you select Jev.
