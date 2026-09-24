@@ -30,6 +30,12 @@ the original Zipformer recognizer. On Windows, run
 launch the native runtime alongside Truss. Keep your existing HA integration,
 engine URL, and token. See [Nemotron setup, GPU options, and limitations](docs/NEMOTRON.md).
 
+From Cygwin, use `./scripts/run_engine_cygwin.sh -SttBackend nemotron -Install`.
+The launcher accepts the same arguments as the PowerShell script.
+
+For the separate staged-question experiment with `answered`/`unanswered` transcript
+state, see [RequestEval](docs/REQUEST_EVAL.md).
+
 ## What is included
 
 | Part | Installed where | Responsibility |

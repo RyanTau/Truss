@@ -46,7 +46,7 @@ Keep at least 1 GB free for installation (more for the Python/LAYA environment).
 From Cygwin, call the PowerShell launcher from the repository root:
 
 ```sh
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run_engine_windows.ps1 -SttBackend nemotron -Install
+./scripts/run_engine_cygwin.sh -SttBackend nemotron -Install
 ```
 
 To return to the previous recognizer, launch with `-SttBackend sherpa`.
