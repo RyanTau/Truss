@@ -26,8 +26,8 @@
         "description": "Select the devices for your chosen mode and set the execution threshold. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
         "data": {
           "entities": "Allowed entities",
-          "threshold": "Minimum action probability (0.5–1)",
-          "margin": "Minimum lead over the next action (0–1)",
+          "threshold": "Minimum decision probability (0.5–1)",
+          "margin": "Minimum lead over competing choices (0–1)",
           "areas": "Rooms"
         }
       },
@@ -69,8 +69,8 @@
         "description": "Select the devices for your chosen mode and set the execution threshold. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
         "data": {
           "entities": "Allowed entities",
-          "threshold": "Minimum action probability (0.5–1)",
-          "margin": "Minimum lead over the next action (0–1)",
+          "threshold": "Minimum decision probability (0.5–1)",
+          "margin": "Minimum lead over competing choices (0–1)",
           "areas": "Rooms"
         }
       }

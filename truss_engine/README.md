@@ -26,3 +26,5 @@ On first start, Truss prints a generated pairing token once. Copy it, then wait 
 For a native Windows installation, use `scripts/run_engine_windows.ps1` from the repository root; the main [README](../README.md#native-windows-engine) has the setup steps.
 
 ## Home Assistant OS app
+
+Engine 0.1.12 adds staged device/attribute/value controls. Update the HA integration too; see [typed controls](../docs/CONTROLS.md).

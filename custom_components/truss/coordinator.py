@@ -11,6 +11,7 @@ from homeassistant.components.homeassistant.exposed_entities import async_should
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .catalog import DecisionGate, build_candidates
+from .controls import build_controls, resolve_value, CONTROL_SCHEMA
 from .const import DOMAIN, EVENT_ACTION, EVENT_PROBABILITIES, RECEIPT_PREFIX
 from .mcp import MCPClient
 from .selection import selected_entity_ids
@@ -27,6 +28,7 @@ class TrussCoordinator:
         self.tools = []
         self.receipts = {}
         self.websockets = set()
+        self.typed_controls = False
 
     async def async_connect(self):
         await self.mcp.initialize()
@@ -36,6 +38,7 @@ class TrussCoordinator:
             health = await response.json()
             if health.get("protocol") != "truss-v1" or not health.get("ready"):
                 raise ValueError("Truss models are not ready")
+            self.typed_controls = health.get("control_schema") == CONTROL_SCHEMA
 
     @property
     def headers(self):
@@ -54,8 +57,19 @@ class TrussCoordinator:
                 device = devices.async_get(record.device_id)
                 area_id = device.area_id if device else None
             area = areas.async_get_area(area_id) if area_id else None
-            entities.append({"entity_id": entity_id, "name": state.name, "state": state.state, "area": area.name if area else "", "aliases": list(record.aliases) if record else []})
+            units = getattr(getattr(self.hass, "config", None), "units", None)
+            entities.append({"entity_id": entity_id, "name": state.name, "state": state.state,
+                "area": area.name if area else "", "aliases": list(record.aliases) if record else [],
+                "attributes": dict(getattr(state, "attributes", {})),
+                "temperature_unit": str(getattr(units, "temperature_unit", ""))})
         return entities
+
+    def candidates(self):
+        if not self.typed_controls:
+            return build_candidates(self.entities(), self.tools)
+        registry = getattr(self.hass, "services", None)
+        services = registry.async_services() if registry else {}
+        return build_controls(self.entities(), self.tools, services)
 
     async def async_text(self, text, language):
         if not text.strip() or len(text) > 1000:
@@ -66,9 +80,9 @@ class TrussCoordinator:
     async def async_stream(self, audio, language, *, text=None):
         # Refresh discovery every utterance so removed MCP tools are not retained.
         self.tools = await self.mcp.list_tools()
-        candidates = build_candidates(self.entities(), self.tools)
+        candidates = self.candidates()
         if not candidates:
-            raise ValueError("No exposed, available entities have compatible MCP tools")
+            raise ValueError("No exposed, available entities have compatible controls")
         gate = DecisionGate(candidates, self.config["threshold"], self.config.get("margin", 0))
         session_id = uuid.uuid4().hex
         outcome = "No action reached the configured probability threshold."
@@ -109,14 +123,28 @@ class TrussCoordinator:
                         current = self.hass.states.get(entity_id)
                         if current is None or current.state in ("unavailable", "unknown"):
                             raise ValueError("Entity became unavailable")
-                        await self.mcp.call(candidate["tool"], candidate["arguments"])
+                        # Rebuild from live capabilities/scope before binding a value.
+                        fresh = next((c for c in self.candidates() if c["id"] == candidate["id"]), None)
+                        if fresh is None:
+                            raise ValueError("Control is no longer available or selected")
+                        if "control" in fresh:
+                            value = candidate.get("selected_value", candidate["control"].get("value"))
+                            fresh = resolve_value(fresh, value)
+                        candidate = fresh
+                        if "service" in candidate:
+                            domain, service = candidate["service"].split(".", 1)
+                            async with asyncio.timeout(15):
+                                await self.hass.services.async_call(domain, service, candidate["arguments"], blocking=True)
+                        else:
+                            await self.mcp.call(candidate["tool"], candidate["arguments"])
                         outcome = "Requested: " + candidate["label"] + "."
                         status = "accepted"
                     except Exception:
                         # A timed-out command may already have executed. Never retry.
                         outcome = "The action failed or could not be confirmed. It has not been retried."
                         status = "failed_or_unconfirmed"
-                    self.hass.bus.async_fire(EVENT_ACTION, {"session_id": session_id, "entity_id": entity_id, "action": candidate["id"], "status": status})
+                    self.hass.bus.async_fire(EVENT_ACTION, {"session_id": session_id, "entity_id": entity_id, "action": candidate["id"],
+                        "attribute": candidate.get("control", {}).get("attribute"), "value": candidate.get("selected_value"), "status": status})
 
                 sender = asyncio.create_task(send_audio())
                 complete = False
@@ -139,7 +167,12 @@ class TrussCoordinator:
                             probabilities = event.get("probabilities", {})
                             score_updates += 1
                             self.hass.bus.async_fire(EVENT_PROBABILITIES, {"session_id": session_id, "revision": event["revision"], "current_revision": latest_revision, "transcript": event.get("text", ""), "probabilities": probabilities, "score_scope": event.get("score_scope", "legacy_grouped"), "decision_backend": event.get("decision_backend", "laya"), "inference_ms": event.get("inference_ms"), "already_fired": gate.claimed})
-                            if candidate := gate.select(probabilities, latest_text):
+                            if event.get("score_scope") == "staged_minimum":
+                                self.hass.bus.async_fire("truss_decision", {"session_id": session_id, "revision": event["revision"],
+                                    "transcript": event.get("text", ""), "trace": event.get("trace", []), "decision": event.get("decision")})
+                                if event.get("decision") is None:
+                                    continue
+                            if candidate := gate.select(probabilities, latest_text, event.get("decision")):
                                 # Keep reading partials while the MCP round-trip runs.
                                 action_task = asyncio.create_task(execute(candidate))
                         elif event.get("type") == "error":

@@ -1,5 +1,5 @@
 name: Truss Local Engine
-version: "0.1.11"
+version: "0.1.12"
 slug: truss_engine
 description: Streaming speech recognition with local Laya or hosted Jev decisions
 arch:

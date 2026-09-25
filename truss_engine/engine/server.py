@@ -14,6 +14,7 @@ from .jev import JevClient
 from .nemotron import Nemotron
 from .streaming import LiveDecisions
 from . import VERSION, SCORE_SCOPE
+from .controls import validate_controls, CONTROL_SCHEMA
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,8 +23,9 @@ def validate_start(start):
     if not isinstance(start, dict) or start.get("type") != "start" or start.get("sample_rate") != 16000:
         raise ValueError("Expected start message with 16000 Hz mono PCM16 audio")
     candidates = start.get("candidates", [])
-    if not isinstance(candidates, list) or not 1 <= len(candidates) <= 48:
-        raise ValueError("Expected 1-48 action candidates")
+    typed = isinstance(candidates, list) and any(isinstance(c, dict) and "control" in c for c in candidates)
+    if not isinstance(candidates, list) or not 1 <= len(candidates) <= (192 if typed else 48):
+        raise ValueError("Invalid number of action candidates")
     ids = set()
     for item in candidates:
         if not isinstance(item, dict):
@@ -41,6 +43,8 @@ def validate_start(start):
             raise ValueError("Invalid device name")
         if not isinstance(aliases, list) or len(aliases) > 8 or any(not isinstance(a, str) or len(a) > 120 for a in aliases):
             raise ValueError("Invalid aliases")
+    if typed:
+        validate_controls(candidates)
     stt = start.get("stt", {})
     if not isinstance(stt, dict) or stt.get("mode") not in ("bundled", "external", "sherpa", "text"):
         raise ValueError("Unknown transcription mode")
@@ -111,7 +115,7 @@ class Engine:
                 await self.nemotron.ready()
             except Exception:
                 ready = False
-        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "stt_backend": self.stt_backend, "score_scope": SCORE_SCOPE, "ready": ready, "bundled_stt": self.nemotron is not None or self.models.recognizer is not None, "error": self.error if ready else self.error or "TranscriptionUnavailable", "active_sessions": self.active})
+        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "control_schema": CONTROL_SCHEMA if not self.jev else None, "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "stt_backend": self.stt_backend, "score_scope": SCORE_SCOPE, "ready": ready, "bundled_stt": self.nemotron is not None or self.models.recognizer is not None, "error": self.error if ready else self.error or "TranscriptionUnavailable", "active_sessions": self.active})
 
     async def score(self, text, candidates):
         if self.jev:
@@ -127,16 +131,18 @@ class Engine:
         if self.active >= 2:
             raise web.HTTPTooManyRequests(text="Two voice sessions are already active")
         self.active += 1
-        ws = web.WebSocketResponse(heartbeat=15, max_msg_size=65536)
+        ws = web.WebSocketResponse(heartbeat=15, max_msg_size=1_000_000)
         decisions_task = reader_task = None
         try:
             await ws.prepare(request)
             self.sockets.add(ws)
             start = await asyncio.wait_for(ws.receive_json(), timeout=10)
             candidates = validate_start(start)
+            if self.jev and any("control" in c for c in candidates):
+                raise ValueError("Typed controls require the local LAYA backend")
             async def emit(event):
                 if event.get("type") == "probabilities":
-                    event["score_scope"] = SCORE_SCOPE
+                    event.setdefault("score_scope", SCORE_SCOPE)
                     event["decision_backend"] = self.backend
                 await ws.send_json(event)
             decisions = LiveDecisions(self.score, emit, candidates)

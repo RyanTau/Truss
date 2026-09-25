@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 import re
-from .const import MAX_ENTITIES, SUPPORTED_DOMAINS
+from .const import MAX_ENTITIES
 
 
 def find_tool(tools: list, intent: str):
@@ -25,7 +25,7 @@ def build_candidates(entities: list, tools: list) -> list:
     for entity in entities:
         entity_id = entity["entity_id"]
         domain = entity_id.split(".")[0]
-        if domain not in SUPPORTED_DOMAINS or entity.get("state") in ("unavailable", "unknown"):
+        if domain not in ("light", "switch", "fan", "input_boolean", "scene", "script") or entity.get("state") in ("unavailable", "unknown"):
             continue
         for operation, tool in (("on", on), ("off", off)):
             if not tool or (operation == "off" and domain in ("scene", "script")):
@@ -50,7 +50,7 @@ class DecisionGate:
         self.claimed = False
         self.blocked_reason = None
 
-    def select(self, probabilities: dict, transcript: str = ""):
+    def select(self, probabilities: dict, transcript: str = "", decision=None):
         if self.claimed or not isinstance(probabilities, dict):
             return None
         self.blocked_reason = None
@@ -72,11 +72,28 @@ class DecisionGate:
             return None
         winner, probability = ranked[0]
         operations = set(re.findall(r"\b(on|off)\b", transcript.casefold()))
-        if operations and (len(operations) > 1 or winner.rsplit(":", 1)[-1] not in operations):
+        power = self.candidates[winner].get("control", {}).get("attribute", "power") == "power"
+        if power and operations and (len(operations) > 1 or winner.rsplit(":", 1)[-1] not in operations):
             self.blocked_reason = "The predicted action conflicts with the spoken on/off request."
             return None
         second = ranked[1][1] if len(ranked) > 1 else 0
         if probability < self.threshold or probability - second < self.margin or (len(ranked) > 1 and probability == second):
             return None
+        candidate = self.candidates[winner]
+        if decision is not None:
+            if (not isinstance(decision, dict) or decision.get("candidate_id") != winner
+                    or decision.get("device") != candidate["entity_id"]
+                    or decision.get("attribute") != candidate.get("control", {}).get("attribute")
+                    or type(decision.get("probability")) not in (int, float) or decision["probability"] != probability
+                    or type(decision.get("margin")) not in (int, float) or not math.isfinite(decision["margin"])
+                    or not 0 < decision["margin"] <= 1 or decision["margin"] < self.margin):
+                return None
+            from .controls import resolve_value
+            try:
+                candidate = resolve_value(candidate, decision.get("value"))
+            except (ValueError, KeyError, TypeError):
+                return None
+        elif "options" in candidate.get("control", {}):
+            return None  # A variable control cannot execute without a validated value.
         self.claimed = True
-        return self.candidates[winner]
+        return candidate

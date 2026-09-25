@@ -41,6 +41,9 @@ class LiveDecisions:
                 prefix_valid = bool(text) and self.text.casefold().startswith(text.casefold() + " ")
                 if revision == self.revision or prefix_valid:
                     self.scored_revision = revision
-                    await self.emit({"type": "probabilities", "revision": revision, "current_revision": self.revision, "text": text, "probabilities": probabilities, "inference_ms": round((time.perf_counter() - start) * 1000, 1)})
+                    metadata = {}
+                    if hasattr(probabilities, "decision"):
+                        metadata = {"decision": probabilities.decision, "trace": probabilities.trace, "score_scope": probabilities.score_scope}
+                    await self.emit({"type": "probabilities", "revision": revision, "current_revision": self.revision, "text": text, "probabilities": probabilities, **metadata, "inference_ms": round((time.perf_counter() - start) * 1000, 1)})
             if self.ended and self.scored_revision == self.revision:
                 return

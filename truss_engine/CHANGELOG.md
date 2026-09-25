@@ -1,3 +1,11 @@
+# 0.1.12
+
+- Add configuration-driven action/device/attribute/value decisions for local LAYA.
+- Discover typed HA controls and bind supported values to locally owned service calls.
+- Publish staged traces and minimum stage probabilities/margins; preserve legacy clients and Jev.
+- Revalidate entity scope and capabilities before execution, retaining single-attempt behavior.
+- See `docs/CONTROLS.md` for supported attributes and limits.
+
 # 0.1.10
 
 - Add hosted Jev (TypeSafe) as an optional decision backend for live partials and typed commands.

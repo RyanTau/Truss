@@ -2,7 +2,7 @@
 
 # Truss Live Voice for Home Assistant
 
-**Act while you speak.** Truss streams Assist microphone audio to a local engine, updates the selected model's action probabilities on each changed partial transcript, and calls Home Assistant's MCP tools as soon as an action crosses your threshold. There is no separate web UI.
+**Act while you speak.** Truss streams Assist microphone audio to a local engine, updates the selected model's action probabilities on each changed partial transcript, and executes a discovered Home Assistant control as soon as a decision crosses your threshold. There is no separate web UI.
 
 **Experimental development release:** transport tests and a real offline Laya/ASR smoke test pass, including live probabilities during audio. However, the real test also exposed missed commands and transcription errors: this is **not yet a reliable everyday voice controller**. A real HA installation, physical satellite, and container builds remain untested. See [measured results and limitations](docs/VALIDATION.md).
 
@@ -126,16 +126,24 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
 
 For streaming voice, select both Truss entities together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. You can also type commands into Assist with **Truss Response** selected: text goes directly to the selected decision backend without transcription. Another STT provider can supply completed text to Truss Response, but that path cannot act during speech.
 
-## Supported commands in 0.1.8
+## Supported controls in 0.1.12
 
-- Turn **lights, switches, fans, and input booleans** on/off.
-- Activate **scenes and scripts**.
-- Say or type a device name or Assist alias and the action you want. The selected backend scores every available action on every nonempty partial transcript, including incomplete phrases such as **turn on the**. No exact-name, fuzzy-match cutoff, or command-verb rule filters the scores.
-- **One action per utterance**, including at most one attempt if MCP times out. No automatic retry of a possibly executed action.
+Local LAYA now evaluates **action needed ? device ? attribute ? value** using a
+catalogue generated from actual Home Assistant capabilities. Power uses binary
+choices; temperature, brightness, position and other supported numeric attributes
+use score scales; modes, sources and select entities use exact choices.
 
-Brightness, temperature, covers, timers, multi-action commands, and implicit “this room” resolution are not implemented. The STT entity interface does not supply the satellite's device ID to this bridge; name the device explicitly. Add broader parameter extraction and intent mappings as separate work. MCP tool names and schemas are discovered, not assumed to accept arbitrary service calls.
+The integration discovers supported features, ranges, steps, modes and registered
+services each utterance. It binds the chosen value to the correct local HA service,
+while retaining existing MCP on/off/activation support. Only selected, exposed,
+available entities can execute. There is still at most one action attempt per
+utterance, with no automatic retry.
 
-The engine asks LAYA or Jev to choose among all available actions plus `wait` in one shared distribution. The `truss_probabilities` event contains the raw score for every action; omitted probability mass belongs to wait (subject to model rounding). There is no deterministic target resolution, zeroing of other actions, score smoothing, or separate group normalization. `score_scope: joint_actions` identifies this behavior. For LAYA, a friendly name or alias is chosen to label each option using the current words; this never removes an action from consideration. Identical action labels are disambiguated with room and entity ID. Your threshold, lead margin, and one-action-per-session limit still control execution. After publishing scores, execution-only checks veto recognized negations, state questions, and winners conflicting with explicit on/off wording. These checks do not require a completed command or matched device name, and never alter the emitted probabilities.
+Update and restart **both** the integration and engine. Listen for `truss_decision`
+in HA Developer tools ? Events to see the context, questions and raw results.
+Typed controls use `score_scope: staged_minimum`: your threshold and lead margin
+must be satisfied at every stage. Legacy clients and Jev retain joint on/off
+scoring. See [supported capabilities, limits and thresholds](docs/CONTROLS.md).
 
 Bundled transcription uses streaming beam search with per-session device-name and alias hints. Recognition errors and incomplete speech are sent to Laya as they arrive. Model scores may rise or fall and may round to zero naturally. If inference falls behind, intermediate partials are coalesced so the latest transcript is processed next. Scores are model estimates, not correctness guarantees; an action may fire before a later spoken correction.
 

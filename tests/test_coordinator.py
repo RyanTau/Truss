@@ -5,7 +5,7 @@ import json
 import sys
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 import aiohttp
 from aiohttp import web
@@ -33,6 +33,55 @@ def load_coordinator():
 
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    def configure_typed_climate(self):
+        from engine.controls import ControlScores
+        attrs = {"supported_features": 1, "min_temp": 16, "max_temp": 30, "target_temp_step": .5}
+        state = types.SimpleNamespace(name="Study thermostat", state="heat", attributes=attrs)
+        self.hass.states.get = lambda entity_id: state
+        self.hass.exposed = {"climate.study"}
+        self.coordinator.config["entities"] = ["climate.study"]
+        self.hass.services = types.SimpleNamespace(async_services=lambda: {"climate": {"set_temperature": {}}}, async_call=AsyncMock())
+        def score(text, candidates):
+            result = ControlScores(candidates)
+            result[candidates[0]["id"]] = .99
+            result.decision = {"candidate_id": candidates[0]["id"], "device": "climate.study", "attribute": "temperature",
+                               "value": 19.5, "probability": .99, "margin": .98}
+            result.trace = [{"stage": "value", "context": {"text": text}, "question": {"type": "score"}, "result": {"score": 7}}]
+            return result
+        self.engine_app["engine"].models.score = score
+        return attrs
+
+    async def test_typed_control_executes_bound_native_service_and_publishes_trace(self):
+        self.configure_typed_climate()
+        outcome = await self.coordinator.async_text("Set study to 19.5", "en")
+        self.assertTrue(outcome.startswith("Requested:"))
+        self.hass.services.async_call.assert_awaited_once_with("climate", "set_temperature",
+            {"entity_id": "climate.study", "temperature": 19.5}, blocking=True)
+        self.assertEqual(self.calls, [])
+        event = next(e for name, e in self.events if name == "truss_decision")
+        self.assertEqual(event["decision"]["value"], 19.5)
+        self.assertEqual(event["trace"][0]["stage"], "value")
+        self.assertEqual(next(e for name, e in self.events if name == "truss_probabilities")["score_scope"], "staged_minimum")
+
+    async def test_capability_change_before_execution_rejects_old_value(self):
+        attrs = self.configure_typed_climate()
+        score = self.engine_app["engine"].models.score
+        def changed(text, candidates):
+            result = score(text, candidates)
+            attrs["min_temp"] = 20
+            return result
+        self.engine_app["engine"].models.score = changed
+        outcome = await self.coordinator.async_text("Set study to 19.5", "en")
+        self.assertIn("not been retried", outcome)
+        self.hass.services.async_call.assert_not_awaited()
+
+    async def test_native_failure_is_not_retried(self):
+        self.configure_typed_climate()
+        self.hass.services.async_call.side_effect = TimeoutError()
+        outcome = await self.coordinator.async_text("Set study to 19.5", "en")
+        self.assertIn("not been retried", outcome)
+        self.hass.services.async_call.assert_awaited_once()
+
     async def asyncSetUp(self):
         self.engine_app = create_app({"api_token": TOKEN}, models=FakeModels())
         self.engine = TestServer(self.engine_app)

@@ -2,6 +2,7 @@
 from pathlib import Path
 import tempfile
 from .names import hotword_text, action_label
+from .controls import score_controls
 SHERPA_REPO = "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26"
 SHERPA_REVISION = "672fbf1"
 SUFFIX = "epoch-99-avg-1-chunk-16-left-64.int8.onnx"
@@ -30,10 +31,9 @@ class LocalModels:
             # Avoid downloading the bundled multilingual/typed checkpoints.
             model_dir = snapshot_download("convaiinnovations/laya", revision="1c5edc1", allow_patterns=["model.safetensors", "rl_agent_config.json", "tokenizer/*", "encoder/*.json"])
         self.agent = Agent(model_dir, device=self.options.get("device", "cpu"))
-        # Laya defaults to a 192-token question head, which truncates larger
-        # device lists. Allow every option's 48-token description plus markers,
-        # instructions, and the full (at most 1000-character) partial transcript.
-        self.agent.cfg.update(head_max_len=64 + 49 * 49, max_len=64 + 49 * 49 + 1024)
+        # Budget for the largest supported attribute scale (128 values),
+        # plus a wait option, instructions and the partial transcript.
+        self.agent.cfg.update(head_max_len=64 + 129 * 49, max_len=64 + 129 * 49 + 1024)
 
     def load_transcription(self):
         if self.options.get("stt_backend", "sherpa") == "nemotron":
@@ -59,6 +59,8 @@ class LocalModels:
                 )
 
     def score(self, text, candidates):
+        if any("control" in candidate for candidate in candidates):
+            return score_controls(self.agent, text, candidates)
         # One shared distribution for every partial, with no name/verb prefilter
         # and no separately normalized groups. Stable order also avoids registry
         # ordering changes altering the question between otherwise equal runs.

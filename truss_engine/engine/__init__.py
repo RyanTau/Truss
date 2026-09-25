@@ -1,3 +1,3 @@
 """Truss local streaming transcription and decision engine."""
-VERSION = "0.1.11"
+VERSION = "0.1.12"
 SCORE_SCOPE = "joint_actions"

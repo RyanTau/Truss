@@ -1,10 +1,31 @@
 # Truss streaming protocol v1
 
-Since 0.1.10, the engine can use local LAYA or hosted Jev. Configure the backend on the engine, not in the session start. Authenticated `/health` reports `decision_backend` and `decision_model`; probability messages carry `decision_backend`. Both backends return the full allowed action map using `score_scope: joint_actions`. No provider key is exposed through these endpoints. Jev validates its complete choice distribution (including wait) before forwarding raw action scores. See [Jev configuration](JEV.md).
+Since 0.1.10, the engine can use local LAYA or hosted Jev. Configure the backend on the engine, not in the session start. Authenticated `/health` reports `decision_backend` and `decision_model`; probability messages carry `decision_backend`. Legacy sessions on both backends return the full allowed action map using `score_scope: joint_actions`. No provider key is exposed through these endpoints. Jev validates its complete choice distribution (including wait) before forwarding raw action scores. See [Jev configuration](JEV.md).
 
 Since 0.1.7, text clients may send a normal start message with `stt: {"mode": "text"}` and a top-level `text` string of 1–1000 characters. Keep `sample_rate: 16000` for envelope compatibility. Do not send audio or an end message. The engine bypasses transcription and emits partial, probabilities, and done using the same decision path. Since 0.1.8, both typed and live voice inputs use the joint scoring described below.
 
 There are two different WebSocket roles. Neither is an OpenAI-compatible audio upload API, Ollama endpoint, nor a Wyoming TCP endpoint.
+
+## Typed controls (0.1.12)
+
+LAYA health advertises `control_schema: device_attributes_v1`. A typed candidate
+adds `control: {attribute, description, type, options: [{value, label}], unit}`.
+Fixed binary/activation candidates instead supply `value` and `value_label` in
+`control`. Candidate IDs still identify locally owned execution templates.
+Sessions cannot mix typed and legacy candidates. Typed sessions allow 192
+candidates across 24 devices, 128 values per attribute, and 4096 total values.
+Legacy sessions retain the 48-candidate limit. Jev rejects typed candidates.
+
+Probability events add `trace` and an optional `decision` containing `candidate_id`,
+`device`, `attribute`, `value`, `probability`, and `margin`. An incomplete decision
+is null and has an all-zero action map. A completed selection puts its minimum
+per-stage probability in the selected candidate's map entry; others are zero.
+`score_scope: staged_minimum` distinguishes this from legacy joint scores.
+The decision margin is the minimum lead over competitors at each stage, including
+wait. Raw model distributions and exact questions are preserved in `trace`.
+The HA integration validates the value against its own catalogue and rechecks
+live capabilities before binding and executing service arguments. See
+[typed controls](CONTROLS.md) for discovery and execution details.
 
 ## HA integration → Truss engine
 
