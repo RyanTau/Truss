@@ -1,0 +1,10 @@
+configuration:
+  decision_backend:
+    name: Decision model
+    description: Choose local Laya or hosted Jev. Restart the engine after changing this setting. Both support chained actions and typed conversation follow-ups.
+  typesafe_api_key:
+    name: TypeSafe API key (Jev only)
+    description: Enter your own TypeSafe API key when selecting Jev. Leave blank for Laya. The key stays on the engine; do not use your Home Assistant token here.
+  jev_model:
+    name: Jev model
+    description: Use jev-latest or a supported versioned TypeSafe model ID. Ignored when Laya is selected.

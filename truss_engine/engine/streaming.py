@@ -11,6 +11,7 @@ class LiveDecisions:
         self.scored_revision = 0
         self.changed = asyncio.Event()
         self.ended = False
+        self.context = None
 
     async def update(self, text):
         if not isinstance(text, str) or len(text) > 1000:
@@ -41,6 +42,16 @@ class LiveDecisions:
                 prefix_valid = bool(text) and self.text.casefold().startswith(text.casefold() + " ")
                 if revision == self.revision or prefix_valid:
                     self.scored_revision = revision
+                    if hasattr(probabilities, "events"):
+                        probabilities.commit()
+                        self.context = probabilities.state
+                        for event in probabilities.events:
+                            await self.emit({"type": "probabilities", "revision": revision,
+                                "current_revision": self.revision, "text": text, **event,
+                                "inference_ms": round((time.perf_counter() - start) * 1000, 1)})
+                        if self.ended and self.scored_revision == self.revision:
+                            return
+                        continue
                     metadata = {}
                     if hasattr(probabilities, "decision"):
                         metadata = {"decision": probabilities.decision, "trace": probabilities.trace, "score_scope": probabilities.score_scope}

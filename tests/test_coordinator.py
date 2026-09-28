@@ -33,6 +33,62 @@ def load_coordinator():
 
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def contextual_model(self, choices):
+        from test_controls import Agent
+        self.configure_typed_climate()
+        agent = Agent(choices)
+        self.engine_app["engine"].models.agent = agent
+        await self.coordinator.async_connect()
+        self.assertTrue(self.coordinator.conversation_controls)
+        return agent
+
+    async def test_contextual_chain_and_followup_execute_in_order(self):
+        agent = await self.contextual_model([1, 1, 1, 0, 7, 1, 1, 1, 0, 8, 1, 1, 1, 0, 9])
+        outcome = await self.coordinator.async_text("Set study to 19.5 then set it to 20", "en", "chat", "user")
+        self.assertTrue(outcome.startswith("Requested:"))
+        await self.coordinator.async_text("actually set it to 20.5", "en", "chat", "user")
+        values = [call.args[2]["temperature"] for call in self.hass.services.async_call.call_args_list]
+        self.assertEqual(values, [19.5, 20, 20.5])
+        self.assertIn("Completed actions: SET STUDY TO 19.5 THEN SET IT TO 20", agent.calls[10][0])
+        self.assertEqual([e["decision_id"] for name, e in self.events if name == "truss_action"], [1, 2, 1])
+
+    async def test_jev_negotiation_executes_typed_chain(self):
+        from test_controls import Agent
+        self.configure_typed_climate()
+        agent = Agent([1, 1, 1, 0, 7, 1, 1, 1, 0, 8])
+        remote = types.SimpleNamespace(model="jev-test", predict=AsyncMock(side_effect=agent.predict), close=AsyncMock())
+        self.engine_app["engine"].jev = remote
+        self.engine_app["engine"].backend = "jev"
+        await self.coordinator.async_connect()
+        self.assertTrue(self.coordinator.conversation_controls)
+        await self.coordinator.async_text("Set study to 19.5 then set it to 20", "en", "chat", "user")
+        self.assertEqual([call.args[2]["temperature"] for call in self.hass.services.async_call.call_args_list], [19.5, 20])
+
+    async def test_context_isolated_by_user_and_reset(self):
+        agent = await self.contextual_model([1, 1, 1, 0, 7] * 3)
+        await self.coordinator.async_text("Set study to 19.5", "en", "chat", "alice")
+        await self.coordinator.async_text("Set study to 19.5", "en", "chat", "bob")
+        self.assertIn("Completed actions: (none)", agent.calls[5][0])
+        await self.coordinator.async_text("/reset", "en", "chat", "alice")
+        await self.coordinator.async_text("Set study to 19.5", "en", "chat", "alice")
+        self.assertIn("Completed actions: (none)", agent.calls[10][0])
+
+    async def test_contextual_failure_stops_remaining_actions_and_clears_history(self):
+        await self.contextual_model([1, 1, 1, 0, 7, 1, 1, 1, 0, 8])
+        self.hass.services.async_call.side_effect = TimeoutError()
+        outcome = await self.coordinator.async_text("Set study to 19.5 then set it to 20", "en", "chat", "user")
+        self.assertIn("not been retried", outcome)
+        self.hass.services.async_call.assert_awaited_once()
+        self.assertNotIn(("user", "chat"), self.coordinator.conversations)
+
+    async def test_pending_text_continues_in_next_message(self):
+        await self.contextual_model([1, 1, 1, 1, 1, 1, 1, 0, 8])
+        await self.coordinator.async_text("Set study to", "en", "chat", "user")
+        self.hass.services.async_call.assert_not_awaited()
+        await self.coordinator.async_text("20", "en", "chat", "user")
+        self.hass.services.async_call.assert_awaited_once()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]["temperature"], 20)
+
     def configure_typed_climate(self):
         from engine.controls import ControlScores
         attrs = {"supported_features": 1, "min_temp": 16, "max_temp": 30, "target_temp_step": .5}
@@ -157,7 +213,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.calls), 1)
         self.assertFalse(self.coordinator.receipts)
 
-    async def test_partial_scores_flow_before_audio_ends_below_threshold(self):
+    async def test_low_probability_executes_before_audio_ends(self):
         received = asyncio.Event()
         transcripts = iter(["Turn", "Turn on", "Turn on kitchen"])
         engine = self.engine_app["engine"]
@@ -173,19 +229,26 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
                 received.clear()
                 yield bytes(2560)
                 await asyncio.wait_for(received.wait(), 3)
-                self.assertEqual(self.calls, [])
+                await asyncio.wait_for(self.action_received.wait(), 3)
         await asyncio.wait_for(self.coordinator.async_stream(audio(), "en"), 5)
         scores = [data for name, data in self.events if name == "truss_probabilities"]
         self.assertEqual([data["transcript"] for data in scores], ["Turn", "Turn on", "Turn on kitchen"])
         self.assertEqual([next(iter(data["probabilities"].values())) for data in scores], [.1, .3, .7])
-        self.assertEqual(self.calls, [])
+        self.assertEqual(len(self.calls), 1)
 
-    async def test_text_below_threshold_and_invalid_text(self):
+    async def test_text_low_probability_and_invalid_text(self):
         self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: .4 for c in candidates}
-        self.assertIn("No action reached", await self.coordinator.async_text("kitchen on", "en"))
+        self.assertIn("Requested:", await self.coordinator.async_text("kitchen on", "en"))
         self.assertIn("1–1000", await self.coordinator.async_text(" " * 3, "en"))
         self.assertIn("1–1000", await self.coordinator.async_text("x" * 1001, "en"))
-        self.assertEqual(self.calls, [])
+        self.assertEqual(len(self.calls), 1)
+
+    async def test_selection_without_saved_probability_settings(self):
+        self.coordinator.config.pop("threshold")
+        self.coordinator.config.pop("margin")
+        self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: .01 for c in candidates}
+        self.assertIn("Requested:", await self.coordinator.async_text("kitchen on", "en"))
+        self.assertEqual(len(self.calls), 1)
 
     async def test_high_scores_still_published_for_negations_and_state_questions(self):
         for text in ("Do not turn on kitchen", "Don't turn on kitchen", "Is kitchen on?", "turn kitchen off"):
@@ -290,7 +353,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.coordinator.consume_receipt(first))
         self.assertIsNotNone(self.coordinator.consume_receipt(second))
 
-    async def test_empty_audio_is_not_reported_as_threshold_failure(self):
+    async def test_empty_audio_reports_missing_audio(self):
         self.engine_app["engine"].models.transcribe = lambda *args: ""
 
         async def empty_audio():
@@ -318,16 +381,16 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["audio_ms"], 1000)
         self.assertEqual(self.calls, [])
 
-    async def test_recognized_command_below_threshold_has_scores(self):
-        self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: .5 for c in candidates}
+    async def test_zero_scores_report_no_action_selected(self):
+        self.engine_app["engine"].models.score = lambda text, candidates: {c["id"]: 0 for c in candidates}
 
         async def audio():
             yield bytes(32000)
 
         receipt = await self.coordinator.async_stream(audio(), "en")
-        self.assertIn("No action reached", self.coordinator.consume_receipt(receipt))
+        self.assertIn("No executable action", self.coordinator.consume_receipt(receipt))
         summary = [data for name, data in self.events if name == "truss_session"][-1]
-        self.assertEqual(summary["result"], "below_threshold")
+        self.assertEqual(summary["result"], "no_action_selected")
         self.assertGreater(summary["score_updates"], 0)
         self.assertGreater(summary["transcript_chars"], 0)
         self.assertNotIn("transcript", summary)

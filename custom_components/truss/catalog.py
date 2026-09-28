@@ -43,10 +43,8 @@ def build_candidates(entities: list, tools: list) -> list:
 
 class DecisionGate:
     """At most one execution per utterance; never retry ambiguous tool outcomes."""
-    def __init__(self, candidates: list, threshold: float, margin: float = 0):
+    def __init__(self, candidates: list):
         self.candidates = {c["id"]: c for c in candidates}
-        self.threshold = threshold
-        self.margin = margin
         self.claimed = False
         self.blocked_reason = None
 
@@ -67,7 +65,8 @@ class DecisionGate:
             return None
         if any(isinstance(p, bool) or not isinstance(p, (float, int)) or not math.isfinite(p) or not 0 <= p <= 1 for p in probabilities.values()):
             return None
-        ranked = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)
+        # Catalogue order breaks ties consistently, regardless of response order.
+        ranked = sorted(((key, probabilities[key]) for key in self.candidates), key=lambda item: item[1], reverse=True)
         if not ranked:
             return None
         winner, probability = ranked[0]
@@ -76,8 +75,8 @@ class DecisionGate:
         if power and operations and (len(operations) > 1 or winner.rsplit(":", 1)[-1] not in operations):
             self.blocked_reason = "The predicted action conflicts with the spoken on/off request."
             return None
-        second = ranked[1][1] if len(ranked) > 1 else 0
-        if probability < self.threshold or probability - second < self.margin or (len(ranked) > 1 and probability == second):
+        # An all-zero map represents no selected action.
+        if probability == 0:
             return None
         candidate = self.candidates[winner]
         if decision is not None:
@@ -86,7 +85,7 @@ class DecisionGate:
                     or decision.get("attribute") != candidate.get("control", {}).get("attribute")
                     or type(decision.get("probability")) not in (int, float) or decision["probability"] != probability
                     or type(decision.get("margin")) not in (int, float) or not math.isfinite(decision["margin"])
-                    or not 0 < decision["margin"] <= 1 or decision["margin"] < self.margin):
+                    or not 0 <= decision["margin"] <= 1):
                 return None
             from .controls import resolve_value
             try:

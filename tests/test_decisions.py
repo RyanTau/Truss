@@ -38,16 +38,20 @@ class CatalogTests(unittest.TestCase):
         candidate_tools[0]["inputSchema"]["required"] = ["name", "unsupported_parameter"]
         self.assertIsNone(catalog.find_tool(candidate_tools, "HassTurnOn"))
 
-    def test_threshold_margin_and_exactly_once(self):
-        gate = catalog.DecisionGate(catalog.build_candidates(self.entities, tools()), .95, .05)
-        self.assertIsNone(gate.select({"light.kitchen:on": .94, "light.kitchen:off": .01}))
-        self.assertIsNone(gate.select({"light.kitchen:on": .97, "light.kitchen:off": .94}))
-        self.assertEqual(gate.select({"light.kitchen:on": .97, "light.kitchen:off": .01})["id"], "light.kitchen:on")
-        self.assertIsNone(gate.select({"light.kitchen:on": .99, "light.kitchen:off": .01}))
+    def test_highest_probability_and_exactly_once(self):
+        for on, off in ((.04, .03), (.5001, .4999), (.5, .5)):
+            gate = catalog.DecisionGate(catalog.build_candidates(self.entities, tools()))
+            # Reverse response order to check stable catalogue-order ties.
+            self.assertEqual(gate.select({"light.kitchen:off": off, "light.kitchen:on": on})["id"], "light.kitchen:on")
+            self.assertIsNone(gate.select({"light.kitchen:on": .99, "light.kitchen:off": .01}))
+
+    def test_zero_scores_do_not_select_an_action(self):
+        gate = catalog.DecisionGate(catalog.build_candidates(self.entities, tools()))
+        self.assertIsNone(gate.select({"light.kitchen:on": 0, "light.kitchen:off": 0}))
 
     def test_malformed_scores_never_execute(self):
         for scores in ({"light.kitchen:on": .99}, {"other": 1}, {"light.kitchen:on": float("nan"), "light.kitchen:off": .0}, {"light.kitchen:on": True, "light.kitchen:off": 0}, {"light.kitchen:on": 1.1, "light.kitchen:off": 0}):
-            gate = catalog.DecisionGate(catalog.build_candidates(self.entities, tools()), .95)
+            gate = catalog.DecisionGate(catalog.build_candidates(self.entities, tools()))
             self.assertIsNone(gate.select(scores))
             self.assertFalse(gate.claimed)
 

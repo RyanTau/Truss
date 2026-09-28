@@ -57,15 +57,12 @@ def actions_schema(defaults):
         fields[vol.Required("areas", default=defaults.get("areas", []))] = selector.AreaSelector(selector.AreaSelectorConfig(multiple=True))
     elif mode == "manual":
         fields[vol.Required("entities", default=defaults.get("entities", []))] = selector.EntitySelector(selector.EntitySelectorConfig(domain=SUPPORTED_DOMAINS, multiple=True))
-    fields.update({
-        vol.Required("threshold", default=defaults.get("threshold", 0.80)): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1)),
-        vol.Required("margin", default=defaults.get("margin", 0.05)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
-    })
     return vol.Schema(fields)
 
 
 def action_settings(defaults, user_input):
-    result = {**defaults, **user_input}
+    result = {key: value for key, value in {**defaults, **user_input}.items()
+              if key not in ("threshold", "margin")}
     # Explicit empty lists also override values retained in config-entry data.
     if result["entity_mode"] != "areas":
         result["areas"] = []

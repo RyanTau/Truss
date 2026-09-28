@@ -61,8 +61,8 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
             await ws.send_bytes(bytes(2560))
             event = await self.next_type(ws, "probabilities")
             self.assertEqual(event["probabilities"], {"light.kitchen:on": .99})
-            # We have deliberately NOT sent end yet. A threshold can fire now.
-            gate = integration("catalog").DecisionGate(self.start()["candidates"], .95)
+            # We have deliberately NOT sent end yet. The most probable action can execute now.
+            gate = integration("catalog").DecisionGate(self.start()["candidates"])
             self.assertIsNotNone(gate.select(event["probabilities"]))
             await ws.send_json({"type": "end"})
             self.assertEqual((await self.next_type(ws, "done"))["text"], "turn on kitchen")

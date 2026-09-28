@@ -2,7 +2,7 @@
 
 # Truss Live Voice for Home Assistant
 
-**Act while you speak.** Truss streams Assist microphone audio to a local engine, updates the selected model's action probabilities on each changed partial transcript, and executes a discovered Home Assistant control as soon as a decision crosses your threshold. There is no separate web UI.
+**Act while you speak.** Truss streams Assist microphone audio to a local engine, updates the selected model's action probabilities on each changed partial transcript, and executes a discovered Home Assistant control as soon as the most probable executable option is selected. There is no separate web UI.
 
 **Experimental development release:** transport tests and a real offline Laya/ASR smoke test pass, including live probabilities during audio. However, the real test also exposed missed commands and transcription errors: this is **not yet a reliable everyday voice controller**. A real HA installation, physical satellite, and container builds remain untested. See [measured results and limitations](docs/VALIDATION.md).
 
@@ -45,7 +45,7 @@ Assist microphone → Truss Live STT → streamed PCM audio → Truss engine
                                                         ├─ local ASR or external streaming STT
                                                         └─ partial transcript → LAYA or Jev
                          HA integration ← probabilities ←───────────┘
-                              ↓ threshold met (before speech ends)
+                              ↓ highest probability selected (before speech ends)
                          HA MCP server → device action
 ```
 
@@ -115,7 +115,7 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
 2. **Engine**: enter `http://YOUR_HA_LAN_IP:10350` (or your separate engine host), and the engine's API token. `localhost` inside HA Container is not your separate Docker container.
 3. **Transcription**: choose **Run locally with Truss** for the bundled English streaming Zipformer model. Or choose **External sherpa-onnx streaming server** (for example `ws://YOUR_STT_HOST:6006`) or **External Truss-protocol WebSocket**, and enter its URL/token. See the protocol requirements below.
 4. **Device selection**: use **All supported entities exposed to Assist** (the default for new installs), **Assist entities in selected rooms**, or **Choose individual entities**. Automatic modes refresh each utterance as Assist exposure and room assignments change. Room mode uses the entity's room or its device's room if none is assigned. Manage exposure under **Settings → Voice assistants → Expose**. The scope must contain 1–24 entities; choose fewer rooms or use manual selection if there are more. Truss rejects an oversized scope rather than silently dropping devices. Existing installations keep their manual selection until you change it. Start with 2–4 devices for lower latency.
-5. **Threshold**: defaults to `0.80`, with a `0.05` lead over the next candidate. Set the margin to `0` if you want threshold-only execution (exact ties still wait). There is no forced wait for silence or consecutive-update delay. Scores for an unchanged spoken prefix remain eligible when more words are appended; rewritten earlier words invalidate them. An action can therefore happen before a later spoken correction.
+5. **Selection**: always uses the highest-probability option, with no configurable probability threshold or lead margin. Existing saved threshold settings are ignored. Exact ties use catalogue order. There is no forced wait for silence or consecutive-update delay. Scores for an unchanged spoken prefix remain eligible when more words are appended; rewritten earlier words invalidate them. An action can therefore happen before a later spoken correction.
 6. Under **Settings → Voice assistants**, create/edit an assistant:
    - Language: English.
    - Speech-to-text: **Truss Live**.
@@ -126,9 +126,9 @@ Keep the PowerShell window running. In the Truss integration, use `http://YOUR_W
 
 For streaming voice, select both Truss entities together. STT returns an opaque per-session receipt to the conversation agent, which reports the result without repeating the action. HA's final STT trace therefore shows a receipt rather than the spoken text; live transcript events are available below. You can also type commands into Assist with **Truss Response** selected: text goes directly to the selected decision backend without transcription. Another STT provider can supply completed text to Truss Response, but that path cannot act during speech.
 
-## Supported controls in 0.1.12
+## Supported controls in 0.1.14
 
-Local LAYA now evaluates **action needed ? device ? attribute ? value** using a
+Local LAYA and hosted Jev evaluate **action needed ? device ? attribute ? value** using a
 catalogue generated from actual Home Assistant capabilities. Power uses binary
 choices; temperature, brightness, position and other supported numeric attributes
 use score scales; modes, sources and select entities use exact choices.
@@ -136,14 +136,22 @@ use score scales; modes, sources and select entities use exact choices.
 The integration discovers supported features, ranges, steps, modes and registered
 services each utterance. It binds the chosen value to the correct local HA service,
 while retaining existing MCP on/off/activation support. Only selected, exposed,
-available entities can execute. There is still at most one action attempt per
-utterance, with no automatic retry.
+available entities can execute. Both backends can execute chained actions in order,
+with one attempt per decision and no automatic retry. Typed Assist follow-ups
+retain completed and pending text within the same conversation; send `/reset`
+to clear it. Separate voice utterances remain independent because STT does not
+provide the Assist conversation ID before inference.
 
 Update and restart **both** the integration and engine. Listen for `truss_decision`
 in HA Developer tools ? Events to see the context, questions and raw results.
-Typed controls use `score_scope: staged_minimum`: your threshold and lead margin
-must be satisfied at every stage. Legacy clients and Jev retain joint on/off
-scoring. See [supported capabilities, limits and thresholds](docs/CONTROLS.md).
+Typed controls select the most probable option at each stage, including wait,
+and report `score_scope: staged_minimum` for inspection. Legacy clients and Jev
+retain joint on/off scoring on older versions. See [supported capabilities and selection](docs/CONTROLS.md).
+
+Select Laya or Jev in the engine app's Configuration. Jev requires your own
+TypeSafe API key; Laya runs locally without one. Restart the engine and reload
+the integration after switching. Windows and Docker configuration instructions
+are in [Jev setup](docs/JEV.md).
 
 Bundled transcription uses streaming beam search with per-session device-name and alias hints. Recognition errors and incomplete speech are sent to Laya as they arrive. Model scores may rise or fall and may round to zero naturally. If inference falls behind, intermediate partials are coalesced so the latest transcript is processed next. Scores are model estimates, not correctness guarantees; an action may fire before a later spoken correction.
 
@@ -151,7 +159,7 @@ Bundled transcription uses streaming beam search with per-session device-name an
 
 **Integration 0.1.9:** setup and Configure now ask for the device selection mode first. After continuing, only the room picker or individual-entity picker for that mode appears; all-Assist mode shows neither. This is an integration-only update; the engine remains 0.1.8 and does not need updating for this form change. Supported Assist entities are exposed lights, switches, fans, input booleans, scenes, and scripts, with a limit of 24 selected entities. Automatic modes refresh on each command.
 
-Version 0.1.8 removes the pre-inference name/operation gate. Update and restart both the engine and integration. Existing probability thresholds are preserved; the new-install default remains **0.80**. Scores now compare every action together, so the old resolved-action scores are not directly comparable. No new dependencies were added after 0.1.6.
+Version 0.1.8 removes the pre-inference name/operation gate. Update and restart both the engine and integration. That release preserved probability thresholds; current versions ignore those saved settings and always select the most probable option. Scores now compare every action together, so the old resolved-action scores are not directly comparable. No new dependencies were added after 0.1.6.
 
 Update **both** the HACS integration and the separate engine, then restart each. HACS does not update the engine. On Windows, stop the engine, run `git pull` in the Truss repository, and run `powershell -NoProfile -File scripts/run_engine_windows.ps1 -Install` to install the new `sentencepiece` dependency and start it. If using your own Cygwin launcher, install `truss_engine/requirements.txt` into its existing Python environment and keep using its existing token/cache configuration. For Docker, run `git pull` followed by `docker compose up -d --build`. The first updated engine start downloads a pinned 245 KB speech tokenizer; subsequent runs reuse the cache. Authenticated `/health` reports `engine_version: 0.1.8` and `score_scope: joint_actions`.
 
@@ -193,7 +201,7 @@ In **Developer tools → Events**, listen to:
 
 - `truss_probabilities`: session ID, transcript revision, live text, per-action probabilities, inference time, and whether an action has already fired.
 - `truss_action`: selected entity/action and `accepted` or `failed_or_unconfirmed`.
-- `truss_session`: completed session summary with audio duration (`audio_ms`), elapsed time, partial transcript/score counts, transcript character count, and result. Contains no transcript or token. `no_audio` means no audio bytes reached Truss; `no_transcript` means audio arrived but no final speech text was recognized; `below_threshold` means scores were received but no action qualified. Empty audio and missing transcripts also produce a warning in Home Assistant's log. If Assist finishes immediately, inspect this event before adjusting the threshold and check any changes made to Home Assistant's voice activity detection.
+- `truss_session`: completed session summary with audio duration (`audio_ms`), elapsed time, partial transcript/score counts, transcript character count, and result. Contains no transcript or token. `no_audio` means no audio bytes reached Truss; `no_transcript` means audio arrived but no final speech text was recognized; `no_action_selected` means scores were received but no executable action was selected. Empty audio and missing transcripts also produce a warning in Home Assistant's log. If Assist finishes immediately, inspect this event and check any changes made to Home Assistant's voice activity detection.
 
 `accepted` means the MCP tool reported success. This version does not independently verify physical device state after the call. Events include transcripts and entity IDs; treat HA event access accordingly. Diagnostics omit tokens, transcripts, URLs, and entity names.
 

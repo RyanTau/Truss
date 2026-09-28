@@ -24,12 +24,20 @@ class JevTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.requests = []
         self.status = 200
+        self.choices = None
         self.payload = {"model": "jev-test", "answers": {"action": {
             "type": "choice", "choice": "action_0", "confidence": .9,
             "probabilities": {"wait": .01, "action_0": .99}}}}
         async def endpoint(request):
             self.assertEqual(request.headers.get("Authorization"), "Bearer fake-typesafe-key")
-            self.requests.append(await request.json())
+            body = await request.json()
+            self.requests.append(body)
+            if self.choices is not None:
+                stage, question = next(iter(body["questions"].items()))
+                keys = list(question["criteria"])
+                selected = keys[self.choices.pop(0)]
+                return web.json_response({"answers": {stage: {"type": "choice", "choice": selected,
+                    "confidence": 1, "probabilities": {key: float(key == selected) for key in keys}}}})
             return web.json_response(self.payload, status=self.status)
         app = web.Application()
         app.router.add_post("/v1/systemone", endpoint)
@@ -55,6 +63,48 @@ class JevTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request["questions"]["action"]["criteria"]["action_0"]["aliases"], ["Kitchen lamp"])
         self.assertNotIn("api_token", str(request))
         self.assertNotIn("HassTurnOn", str(request))
+
+    async def test_typed_conversation_chain_and_followup_over_http(self):
+        from test_controls import temperature_controls
+        self.choices = [1, 1, 1, 0, 7, 1, 1, 1, 0, 8, 1, 1, 1, 0, 9]
+        app = create_app({**self.options, "bundled_stt": False})
+        server = TestServer(app)
+        await server.start_server()
+        await app["engine"].load_task
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(server.make_url("/health"), headers=HEADERS) as response:
+                    health = await response.json()
+                    self.assertEqual(health["conversation_schema"], "completed_pending_v1")
+                    self.assertEqual(health["control_schema"], "device_attributes_v1")
+                context = {"completed": "", "pending": ""}
+                for text, expected in [("set study to 19.5 then set it to 20", [19.5, 20]), ("actually set it to 20.5", [20.5])]:
+                    async with session.ws_connect(server.make_url("/v1/stream"), headers=HEADERS) as ws:
+                        await ws.send_json({"type": "start", "sample_rate": 16000, "candidates": temperature_controls(),
+                            "stt": {"mode": "text"}, "text": text, "conversation_schema": "completed_pending_v1", "context": context})
+                        decisions = []
+                        while True:
+                            event = await asyncio.wait_for(ws.receive_json(), 5)
+                            self.assertNotEqual(event["type"], "error")
+                            if event["type"] == "done":
+                                context = event["context"]
+                                break
+                            if event.get("decision"):
+                                self.assertEqual(event["decision_backend"], "jev")
+                                decisions.append(event["decision"]["value"])
+                        self.assertEqual(decisions, expected)
+                self.assertIn("Completed actions: SET STUDY TO 19.5 THEN SET IT TO 20", self.requests[10]["state"])
+                self.assertEqual(self.requests[4]["questions"]["value"]["type"], "choice")
+                self.assertGreater(len(self.requests[4]["questions"]["value"]["criteria"]), 10)
+                self.assertIsNone(app["engine"].models.agent)
+        finally:
+            await server.close()
+
+    async def test_predict_rejects_invalid_typed_distribution(self):
+        self.payload = {"answers": {"value": {"type": "choice", "choice": "0", "confidence": 1,
+            "probabilities": {"0": .2, "1": .2}}}}
+        with self.assertRaisesRegex(ValueError, "Invalid Jev"):
+            await self.client.predict("set to 1", {"value": {"type": "score", "instructions": "Select target", "criteria": ["0", "1"]}})
 
     async def test_malformed_responses_fail_closed(self):
         original = copy.deepcopy(self.payload)

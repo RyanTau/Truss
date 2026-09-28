@@ -1,5 +1,6 @@
 """Return a session receipt to Assist without executing a command twice."""
 import logging
+import uuid
 from homeassistant.components import conversation
 from homeassistant.helpers import intent
 from .const import DOMAIN, RECEIPT_PREFIX
@@ -24,6 +25,7 @@ class TrussConversation(conversation.ConversationEntity):
         return ["en", "en-US", "en-GB", "en-AU"]
 
     async def async_process(self, user_input):
+        conversation_id = user_input.conversation_id or uuid.uuid4().hex
         response = intent.IntentResponse(language=user_input.language)
         message = self.coordinator.consume_receipt(user_input.text)
         if message is None:
@@ -31,9 +33,11 @@ class TrussConversation(conversation.ConversationEntity):
                 message = "This Truss voice session has expired or was already handled."
             else:
                 try:
-                    message = await self.coordinator.async_text(user_input.text, user_input.language)
+                    message = await self.coordinator.async_text(user_input.text, user_input.language,
+                        conversation_id=conversation_id,
+                        user_id=getattr(getattr(user_input, "context", None), "user_id", None))
                 except Exception as error:
                     _LOGGER.warning("Truss text command failed (%s)", type(error).__name__)
                     message = "Truss could not complete this command. Check the engine connection and Home Assistant logs."
         response.async_set_speech(message)
-        return conversation.ConversationResult(response=response, conversation_id=user_input.conversation_id)
+        return conversation.ConversationResult(response=response, conversation_id=conversation_id)

@@ -17,6 +17,7 @@ from .mcp import MCPClient
 from .selection import selected_entity_ids
 
 _LOGGER = logging.getLogger(__name__)
+CONVERSATION_SCHEMA = "completed_pending_v1"
 
 
 class TrussCoordinator:
@@ -29,6 +30,9 @@ class TrussCoordinator:
         self.receipts = {}
         self.websockets = set()
         self.typed_controls = False
+        self.conversation_controls = False
+        self.conversations = {}
+        self.text_lock = asyncio.Lock()
 
     async def async_connect(self):
         await self.mcp.initialize()
@@ -39,6 +43,7 @@ class TrussCoordinator:
             if health.get("protocol") != "truss-v1" or not health.get("ready"):
                 raise ValueError("Truss models are not ready")
             self.typed_controls = health.get("control_schema") == CONTROL_SCHEMA
+            self.conversation_controls = self.typed_controls and health.get("conversation_schema") == CONVERSATION_SCHEMA
 
     @property
     def headers(self):
@@ -71,21 +76,43 @@ class TrussCoordinator:
         services = registry.async_services() if registry else {}
         return build_controls(self.entities(), self.tools, services)
 
-    async def async_text(self, text, language):
+    async def async_text(self, text, language, conversation_id=None, user_id=None):
         if not text.strip() or len(text) > 1000:
             return "Please enter a command of 1–1000 characters."
-        receipt = await self.async_stream(None, language, text=text)
-        return self.consume_receipt(receipt)
+        # Serialize follow-ups so each sees the previous turn's completed state.
+        async with self.text_lock:
+            self.conversations = {key: item for key, item in self.conversations.items() if item[0] > time.monotonic()}
+            key = (user_id, conversation_id) if conversation_id else None
+            if text.strip() == "/reset":
+                self.conversations.pop(key, None)
+                return "Conversation context cleared."
+            context = self.conversations.get(key, (0, {"completed": "", "pending": ""}))[1]
+            if self.conversation_controls and len(" ".join(part for part in (*context.values(), text.strip()) if part)) > 1000:
+                return "This conversation is full. Send /reset to start a new request."
+            try:
+                receipt = await self.async_stream(None, language, text=text, context_key=key)
+            except BaseException:
+                self.conversations.pop(key, None)
+                raise
+            return self.consume_receipt(receipt)
 
-    async def async_stream(self, audio, language, *, text=None):
+    async def async_stream(self, audio, language, *, text=None, context_key=None):
         # Refresh discovery every utterance so removed MCP tools are not retained.
         self.tools = await self.mcp.list_tools()
         candidates = self.candidates()
         if not candidates:
             raise ValueError("No exposed, available entities have compatible controls")
-        gate = DecisionGate(candidates, self.config["threshold"], self.config.get("margin", 0))
+        gate = DecisionGate(candidates)
+        contextual = self.conversation_controls and all("control" in c for c in candidates)
+        context = self.conversations.get(context_key, (0, {"completed": "", "pending": ""}))[1] if context_key else {"completed": "", "pending": ""}
+        next_context = None
+        seen_decisions = set()
+        action_failed = False
+        context_invalid = False
+        requested = []
+        action_attempts = 0
         session_id = uuid.uuid4().hex
-        outcome = "No action reached the configured probability threshold."
+        outcome = "No executable action was selected."
         latest_revision = 0
         latest_text = ""
         audio_bytes = 0
@@ -99,7 +126,9 @@ class TrussCoordinator:
         async with self.session.ws_connect(url, headers=self.headers, heartbeat=15, max_msg_size=1_000_000) as ws:
             self.websockets.add(ws)
             try:
-                await ws.send_json({"type": "start", "session_id": session_id, "language": language, "sample_rate": 16000, "candidates": candidates, **({"text": text} if text is not None else {}), "stt": {"mode": "text" if text is not None else self.config["stt_mode"], "url": self.config.get("stt_url", ""), "token": self.config.get("stt_token", "")}})
+                await ws.send_json({"type": "start", "session_id": session_id, "language": language, "sample_rate": 16000, "candidates": candidates,
+                    **({"conversation_schema": CONVERSATION_SCHEMA, "context": context} if contextual else {}),
+                    **({"text": text} if text is not None else {}), "stt": {"mode": "text" if text is not None else self.config["stt_mode"], "url": self.config.get("stt_url", ""), "token": self.config.get("stt_token", "")}})
 
                 async def send_audio():
                     nonlocal audio_bytes
@@ -114,8 +143,13 @@ class TrussCoordinator:
                         await ws.close()
                         raise
 
-                async def execute(candidate):
-                    nonlocal outcome
+                async def execute(candidate, previous=None, decision_id=None):
+                    nonlocal outcome, action_failed, action_attempts
+                    if previous:
+                        await previous
+                    if action_failed or context_invalid:
+                        return  # Do not act on context dependent on an unconfirmed action.
+                    action_attempts += 1
                     entity_id = candidate["entity_id"]
                     try:
                         if not async_should_expose(self.hass, "conversation", entity_id):
@@ -137,14 +171,19 @@ class TrussCoordinator:
                                 await self.hass.services.async_call(domain, service, candidate["arguments"], blocking=True)
                         else:
                             await self.mcp.call(candidate["tool"], candidate["arguments"])
-                        outcome = "Requested: " + candidate["label"] + "."
+                        requested.append(candidate["label"])
+                        outcome = "Requested: " + "; ".join(requested) + "."
                         status = "accepted"
                     except Exception:
                         # A timed-out command may already have executed. Never retry.
-                        outcome = "The action failed or could not be confirmed. It has not been retried."
+                        action_failed = True
+                        outcome = (("Requested: " + "; ".join(requested) + ". ") if requested else "") + "The action failed or could not be confirmed. It has not been retried."
+                        if contextual:
+                            outcome += " Remaining actions were stopped; conversation context was cleared."
                         status = "failed_or_unconfirmed"
                     self.hass.bus.async_fire(EVENT_ACTION, {"session_id": session_id, "entity_id": entity_id, "action": candidate["id"],
-                        "attribute": candidate.get("control", {}).get("attribute"), "value": candidate.get("selected_value"), "status": status})
+                        "attribute": candidate.get("control", {}).get("attribute"), "value": candidate.get("selected_value"), "status": status,
+                        **({"decision_id": decision_id} if decision_id is not None else {})})
 
                 sender = asyncio.create_task(send_audio())
                 complete = False
@@ -160,6 +199,8 @@ class TrussCoordinator:
                             latest_revision = event["revision"]
                             latest_text = event["text"]
                         elif event.get("type") == "probabilities":
+                            if contextual and event.get("conversation_schema") != CONVERSATION_SCHEMA:
+                                raise RuntimeError("Engine omitted negotiated conversation metadata")
                             if event.get("revision") != latest_revision:
                                 prefix = event.get("text", "")
                                 if not prefix or not latest_text.casefold().startswith(prefix.casefold() + " "):
@@ -169,16 +210,48 @@ class TrussCoordinator:
                             self.hass.bus.async_fire(EVENT_PROBABILITIES, {"session_id": session_id, "revision": event["revision"], "current_revision": latest_revision, "transcript": event.get("text", ""), "probabilities": probabilities, "score_scope": event.get("score_scope", "legacy_grouped"), "decision_backend": event.get("decision_backend", "laya"), "inference_ms": event.get("inference_ms"), "already_fired": gate.claimed})
                             if event.get("score_scope") == "staged_minimum":
                                 self.hass.bus.async_fire("truss_decision", {"session_id": session_id, "revision": event["revision"],
-                                    "transcript": event.get("text", ""), "trace": event.get("trace", []), "decision": event.get("decision")})
+                                    "transcript": event.get("text", ""), "trace": event.get("trace", []), "decision": event.get("decision"),
+                                    "decision_id": event.get("decision_id"), "context": event.get("context")})
                                 if event.get("decision") is None:
                                     continue
-                            if candidate := gate.select(probabilities, latest_text, event.get("decision")):
+                            selection_gate, action_text = gate, latest_text
+                            decision_id = None
+                            if contextual:
+                                decision_id = event.get("decision_id")
+                                if type(decision_id) is not int or not 1 <= decision_id <= 32:
+                                    raise RuntimeError("Invalid conversation decision ID")
+                                if decision_id in seen_decisions:
+                                    continue
+                                if decision_id != len(seen_decisions) + 1:
+                                    raise RuntimeError("Out-of-order conversation decision")
+                                seen_decisions.add(decision_id)
+                                action_text = event.get("action_text")
+                                spoken = " ".join(part for part in (context["pending"], latest_text) if part)
+                                if not isinstance(action_text, str) or not action_text.strip() or action_text.casefold() not in spoken.casefold():
+                                    raise RuntimeError("Decision does not match the current transcript")
+                                selection_gate = DecisionGate(candidates)
+                            if candidate := selection_gate.select(probabilities, action_text, event.get("decision")):
+                                gate.claimed = True
                                 # Keep reading partials while the MCP round-trip runs.
-                                action_task = asyncio.create_task(execute(candidate))
+                                action_task = asyncio.create_task(execute(candidate, action_task, decision_id))
+                            elif contextual:
+                                context_invalid = True
+                                gate.blocked_reason = selection_gate.blocked_reason or "A conversation decision could not be validated."
+                                # Later decisions may rely on this rejected prediction.
+                                raise RuntimeError("Conversation decision rejected")
                         elif event.get("type") == "error":
                             raise RuntimeError("Truss transcription or inference failed")
                         elif event.get("type") == "done":
                             final_text = event.get("text", "")
+                            if contextual:
+                                next_context = event.get("context")
+                                if (not isinstance(next_context, dict) or set(next_context) != {"completed", "pending"}
+                                        or any(not isinstance(v, str) for v in next_context.values())
+                                        or len(" ".join(next_context.values()).strip()) > 1000):
+                                    # Empty-audio sessions legitimately have no evaluation.
+                                    if final_text.strip():
+                                        raise RuntimeError("Invalid final conversation context")
+                                    next_context = context
                             complete = True
                             break
                 if not complete:
@@ -194,6 +267,13 @@ class TrussCoordinator:
                     await asyncio.gather(sender, return_exceptions=True)
                 if action_task:
                     await asyncio.shield(action_task)
+        if contextual and context_key:
+            if action_failed or context_invalid:
+                self.conversations.pop(context_key, None)
+            elif next_context is not None:
+                if context_key not in self.conversations and len(self.conversations) >= 100:
+                    self.conversations.pop(next(iter(self.conversations)))
+                self.conversations[context_key] = (time.monotonic() + 600, next_context)
         if gate.claimed:
             result = "action_attempted"
         elif gate.blocked_reason:
@@ -209,8 +289,8 @@ class TrussCoordinator:
             result = "no_scores"
             outcome = "Truss recognized speech but received no usable action scores. Check the engine logs."
         else:
-            result = "below_threshold"
-        summary = {"session_id": session_id, "audio_ms": round(audio_bytes / 32), "elapsed_ms": round((time.monotonic() - started) * 1000), "partial_updates": partial_updates, "score_updates": score_updates, "transcript_chars": len(final_text), "result": result}
+            result = "no_action_selected"
+        summary = {"session_id": session_id, "audio_ms": round(audio_bytes / 32), "elapsed_ms": round((time.monotonic() - started) * 1000), "partial_updates": partial_updates, "score_updates": score_updates, "transcript_chars": len(final_text), "result": result, "action_attempts": action_attempts}
         self.hass.bus.async_fire("truss_session", summary)
         log = _LOGGER.warning if result in ("no_audio", "no_transcript", "no_scores") else _LOGGER.debug
         log("Truss session: result=%s audio_ms=%s elapsed_ms=%s partials=%s scores=%s transcript_chars=%s", result, summary["audio_ms"], summary["elapsed_ms"], partial_updates, score_updates, len(final_text))
@@ -228,3 +308,4 @@ class TrussCoordinator:
     async def async_close(self):
         await asyncio.gather(*(ws.close() for ws in list(self.websockets)), return_exceptions=True)
         self.receipts.clear()
+        self.conversations.clear()

@@ -1,6 +1,6 @@
 """Constants shared by the Truss integration."""
 DOMAIN = "truss"
-VERSION = "0.1.12"
+VERSION = "0.1.14"
 PLATFORMS = ["stt", "conversation"]
 SUPPORTED_DOMAINS = ["light", "switch", "fan", "input_boolean", "scene", "script", "climate", "cover", "media_player", "select", "input_select", "number", "input_number"]
 MAX_ENTITIES = 24

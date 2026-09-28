@@ -6,12 +6,25 @@ Sources: [TypeSafe API](https://docs.typesafe.ai/api), [models](https://docs.typ
 
 ## What changes
 
+Since 0.1.14, Jev uses the same completed/pending conversation evaluator as Laya:
+device, attribute, and value selection; chained actions; and typed Assist
+follow-up context. Numeric targets use Jev Choice questions because its Score
+API allows only ten levels. All supported settings remain available, and the
+highest-probability setting wins.
+
+In Home Assistant, open **Settings > Apps > Truss Local Engine > Configuration**.
+Set **Decision model** (`decision_backend`) to `jev`, enter your own
+**TypeSafe API key** (`typesafe_api_key`), and keep `jev_model: jev-latest`.
+Save and restart the engine, then reload the Truss integration. To return to
+Laya, select `laya`; no TypeSafe key is required. Backend settings are owned by
+the engine; the integration detects them through health negotiation.
+
 - Select `decision_backend: jev` on the **engine**, then restart it. The HA integration continues connecting to the same engine URL and pairing token.
 - Jev mode does not import, load, or download LAYA or PyTorch. The lightweight Docker/Windows installation below also avoids installing them. Existing cached models are left untouched.
 - Transcription is separate: bundled sherpa-onnx, an external streaming transcription server, and completed text inputs continue to work. Jev does not transcribe audio. The Truss engine is still required as the bridge.
-- Each scored partial sends its text and selected device descriptions (names, aliases, rooms, action labels) to TypeSafe over HTTPS. Audio, the HA access token, MCP tool arguments, and the Truss pairing token are not sent to TypeSafe.
+- Each evaluation sends completed/pending text and the relevant device/attribute/value descriptions to TypeSafe over HTTPS. Audio, the HA access token, MCP tool arguments, and the Truss pairing token are not sent to TypeSafe.
 - This requires internet access and a TypeSafe API key. API billing and limits apply; a single utterance can produce multiple requests. Intermediate transcripts are coalesced when inference is busy. No automatic API retries or fallback to LAYA are performed.
-- Existing execution thresholds, streaming events, and execution checks remain. The threshold is an action probability, not the separate TypeSafe `confidence` field. Retest thresholds against Jev rather than assuming LAYA scores transfer.
+- Streaming events and execution checks remain. Selection uses the highest action probability with no configurable threshold or lead margin; the separate TypeSafe `confidence` field does not determine selection.
 
 ## Native Windows / PowerShell
 

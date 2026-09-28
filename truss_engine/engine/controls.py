@@ -76,9 +76,11 @@ def score_controls(agent, text, candidates):
         for key, label in labels.items():
             display = label if label not in rendered else f"{label} ({key})"
             rendered[display] = key
+        instructions = ("Classify only the new In progress request. Completed actions are history and must not be repeated. "
+                        + instructions + " Use Completed only to resolve references such as it, them, or that.")
         question = {"type": kind, "instructions": instructions,
                     "criteria": list(labels.values()) if kind == "score" else dict.fromkeys(rendered)}
-        answer = agent.predict(text.upper(), {stage: question})["answers"][stage]
+        answer = agent.predict("Completed actions: (none)\nIn progress request: " + text.upper(), {stage: question})["answers"][stage]
         probabilities = answer.get("probabilities", {})
         expected = {str(i) for i in range(len(keys))} if kind == "score" else set(rendered)
         if (set(probabilities) != expected or any(type(p) not in (int, float) or not math.isfinite(p) or not 0 <= p <= 1 for p in probabilities.values())
@@ -88,12 +90,10 @@ def score_controls(agent, text, candidates):
             score = answer.get("score")
             if type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= len(keys) - 1:
                 raise ValueError("Invalid score level")
-            selected = max(probabilities, key=probabilities.get)
+            selected = max((str(i) for i in range(len(keys))), key=probabilities.get)
             chosen = keys[int(selected)]
         else:
-            selected = answer.get("choice")
-            if selected not in rendered or probabilities[selected] < max(probabilities.values()) - 1e-6:
-                raise ValueError("Invalid staged choice")
+            selected = max(rendered, key=probabilities.get)
             chosen = rendered[selected]
         probability = probabilities[selected]
         competitors = [p for key, p in probabilities.items() if key != selected]

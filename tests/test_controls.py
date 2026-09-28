@@ -113,9 +113,8 @@ class StagedTests(unittest.TestCase):
         self.assertEqual(result.decision["attribute"], "temperature")
         self.assertAlmostEqual(result[candidates[0]["id"]], .91)
         self.assertEqual([s["stage"] for s in result.trace], ["request", "device", "attribute", "value.ready", "value"])
-        selected = catalog.DecisionGate(candidates, .9, .05).select(result, "set study to 19.5", result.decision)
+        selected = catalog.DecisionGate(candidates).select(result, "set study to 19.5", result.decision)
         self.assertEqual(selected["arguments"]["temperature"], 19.5)
-        self.assertIsNone(catalog.DecisionGate(candidates, .95).select(result, "set study to 19.5", result.decision))
 
     def test_wait_at_each_stage_and_missing_values_never_execute(self):
         for decisions in ([0], [1, 0], [1, 1, 0], [1, 1, 1, 1]):
@@ -123,7 +122,7 @@ class StagedTests(unittest.TestCase):
             self.assertIsNone(result.decision)
             self.assertTrue(all(p == 0 for p in result.values()))
         candidate = temperature_controls()[0]
-        self.assertIsNone(catalog.DecisionGate([candidate], .5).select({candidate["id"]: 1}))
+        self.assertIsNone(catalog.DecisionGate([candidate]).select({candidate["id"]: 1}))
 
     def test_binary_value_and_choice_values_use_choice_questions(self):
         candidates = controls.build_controls([{"entity_id": "light.desk", "name": "Desk"}], [], {"light": {"turn_on": {}, "turn_off": {}}})
@@ -133,19 +132,38 @@ class StagedTests(unittest.TestCase):
         self.assertEqual(result.decision["candidate_id"], "light.desk:off")
         self.assertEqual([s["question"]["type"] for s in result.trace], ["choice"] * 4)
 
-    def test_margin_includes_wait_and_other_values(self):
+    def test_small_lead_over_wait_executes(self):
         candidates = temperature_controls()
         result = score_controls(Agent([1, 1, 1, 0, 7], {"request": .51}), "set study to 19.5", candidates)
-        self.assertIsNone(catalog.DecisionGate(candidates, .5, .05).select(result, "set study", result.decision))
+        self.assertIsNotNone(catalog.DecisionGate(candidates).select(result, "set study", result.decision))
+
+    def test_low_probability_value_and_tied_ready_stage_execute(self):
+        candidates = temperature_controls()
+        result = score_controls(Agent([1, 1, 1, 0, 7], {"value.ready": .5, "value": .1}), "set study to 19.5", candidates)
+        self.assertEqual(result.decision["value"], 19.5)
+        self.assertEqual(result.decision["margin"], 0)
+        self.assertEqual(result.decision["probability"], .1)
+        self.assertIsNotNone(catalog.DecisionGate(candidates).select(result, "set study", result.decision))
+
+    def test_choice_uses_probabilities_instead_of_answer_label(self):
+        class WrongLabelAgent(Agent):
+            def predict(self, text, questions):
+                result = super().predict(text, questions)
+                for answer in result["answers"].values():
+                    if "choice" in answer:
+                        answer["choice"] = "ignored label"
+                return result
+        result = score_controls(WrongLabelAgent([1, 1, 1, 0, 7]), "set study to 19.5", temperature_controls())
+        self.assertEqual(result.decision["value"], 19.5)
 
     def test_unknown_value_invalid_decision_and_no_retry(self):
         candidates = temperature_controls()
         result = score_controls(Agent([1, 1, 1, 0, 7]), "set study to 19.5", candidates)
         for changes in ({"value": 99.0}, {"attribute": "other"}, {"candidate_id": "other"}, {"margin": float("nan")}, {"probability": True}):
-            gate = catalog.DecisionGate(candidates, .9)
+            gate = catalog.DecisionGate(candidates)
             self.assertIsNone(gate.select(result, "set study", {**result.decision, **changes}))
             self.assertFalse(gate.claimed)
-        gate = catalog.DecisionGate(candidates, .9)
+        gate = catalog.DecisionGate(candidates)
         self.assertIsNotNone(gate.select(result, "set study", result.decision))
         self.assertIsNone(gate.select(result, "set study", result.decision))
 

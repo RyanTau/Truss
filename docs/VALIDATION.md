@@ -48,23 +48,12 @@ The [recorded output](validation/smoke-cpu.jsonl) is a smoke test, not an accura
 
 The initial binary-per-action implementation was slower and confused opposite operations. Small multiple-choice groups improved the tested cases and latency, but **the current pretrained model is not sufficiently validated or reliable for general home control**. Threshold tuning alone does not fix incorrect rankings. A labelled corpus of household commands and partial transcripts, model adaptation, and hardware-specific latency work remain necessary.
 
-You can inspect the threshold decision without loading models or contacting HA:
+You can inspect the current highest-probability selection without loading models or contacting HA:
 
-```sh
+```bash
 python scripts/replay_trace.py docs/validation/smoke-cpu.jsonl
-python scripts/replay_trace.py docs/validation/smoke-cpu.jsonl --threshold 0.85
 ```
 
-The default 0.95 produces no request for this recording. At 0.85, the recorded scores would request kitchen-on at 2326 ms, while audio was still arriving. This is a replay of one synthetic recording, not a recommendation to lower the threshold for general use.
-
-Scored prefixes remain usable when ASR only appends words; otherwise continuously arriving words can starve decisions. Earlier-word rewrites invalidate a pending score. This deliberately allows commitment before the user finishes their sentence.
-
-The pinned model files total approximately 0.92 GB. The Windows test environment additionally used approximately 0.72 GB for Python packages and 0.13 GB for Python itself, excluding package caches and temporary downloads. These are not Linux container size or minimum RAM estimates.
-
-## Not yet verified
-
-Actual HA config/options flows and MCP server, physical voice satellites and devices, Docker/Supervisor builds, ARM performance, other microphones/accents/noise, and deployment against an actual external sherpa server. External-protocol adapters were tested with protocol simulators. Follow [the release checklist](RELEASE.md) before publishing compatibility claims.
-
-## Home Assistant minimum version
-
-Version 0.1.2 sets the declared minimum to 2026.1.0 at the maintainer's request. The previous 0.1.1 compatibility review examined 2025.11.0: source review confirmed the [MCP Streamable HTTP endpoint](https://github.com/home-assistant/core/blob/2025.11.0/homeassistant/components/mcp_server/http.py), STT stream entity interface, conversation processing/control feature, exposure lookup, and options-flow config entry API at that tag. HA 2025.10.0's MCP implementation uses the older separate SSE transport; Truss does not implement that transport. The add-on uses the legacy-compatible `io.hass.type=addon` Docker label. This source review does not replace installing and exercising both the minimum and current HA releases.
+The results above describe historical versions with thresholds. Current selection
+has no configurable threshold or lead margin, so those historical execution
+outcomes do not describe the current behavior.

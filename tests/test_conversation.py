@@ -28,7 +28,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         agent = module.TrussConversation(types.SimpleNamespace(entry_id='test'), coordinator)
         user = types.SimpleNamespace(text='lamp on', language='en', conversation_id='chat')
         result = await agent.async_process(user)
-        coordinator.async_text.assert_awaited_once_with('lamp on', 'en')
+        coordinator.async_text.assert_awaited_once_with('lamp on', 'en', conversation_id='chat', user_id=None)
         self.assertEqual(result.conversation_id, 'chat')
         result.response.async_set_speech.assert_called_once_with('Requested: lamp on.')
         coordinator.async_text.reset_mock()

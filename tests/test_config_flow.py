@@ -59,8 +59,8 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
                 flow.hass = object()
                 self.assertEqual(fields(await flow.async_step_selection()), {"entity_mode"})
                 form = await flow.async_step_selection({"entity_mode": mode})
-                self.assertEqual(fields(form), picker | {"threshold", "margin"})
-                values = {"threshold": .8, "margin": .05, **{key: ["selected"] for key in picker}}
+                self.assertEqual(fields(form), picker)
+                values = {key: ["selected"] for key in picker}
                 with patch.object(module, "selected_entity_ids", return_value=["light.one"]):
                     result = await flow.async_step_actions(form["data_schema"](values))
                 self.assertEqual(result["type"], "create_entry")
@@ -85,7 +85,7 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
             connection = first["data_schema"]({"entity_mode": mode})
             with patch.object(module, "check_mcp", AsyncMock()), patch.object(module, "check_engine", AsyncMock()):
                 form = await flow.async_step_init(connection)
-            self.assertEqual(fields(form), picker | {"threshold", "margin"})
+            self.assertEqual(fields(form), picker)
             values = form["data_schema"]({key: ["new"] for key in picker})
             with patch.object(module, "selected_entity_ids", return_value=[]):
                 retry = await flow.async_step_actions(values)
@@ -94,7 +94,8 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(module, "selected_entity_ids", return_value=["light.one"]):
                 result = await flow.async_step_actions(values)
             saved = result["data"]
-            self.assertEqual(saved["threshold"], .9)
+            self.assertNotIn("threshold", saved)
+            self.assertNotIn("margin", saved)
             self.assertEqual(saved["mcp_token"], "ha-token")
             self.assertEqual(saved["areas"], ["new"] if mode == "areas" else [])
             self.assertEqual(saved["entities"], ["new"] if mode == "manual" else [])

@@ -1,3 +1,18 @@
+# 0.1.14
+
+- Enable typed controls, chained actions and completed/pending context with hosted Jev.
+- Adapt numeric target grids to Jev Choice questions, retaining every supported setting.
+- Reuse engine backend/key/model configuration; add Home Assistant configuration guidance.
+- Keep API keys on the engine and preserve legacy clients, validation and no-retry behavior.
+
+# 0.1.13
+
+- Port the standalone completed/pending evaluator and history-boundary prompts into local LAYA.
+- Negotiate conversation state and sequential, deduplicated chained decisions.
+- Retain typed Assist follow-up context by user/conversation, with reset and expiry.
+- Stop queued actions and clear history after execution failure; preserve receipt and capability checks.
+- Separate voice utterances remain independent; legacy clients and Jev retain their existing path.
+
 # 0.1.12
 
 - Add configuration-driven action/device/attribute/value decisions for local LAYA.

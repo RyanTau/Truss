@@ -9,6 +9,6 @@ This source is a development release. Automated mock-model checks are necessary 
 5. Select both Truss entities in an Assist pipeline. With a real microphone and test light, verify an action arrives BEFORE the audio end message and exactly once.
 6. Verify MCP JSON and SSE responses against the official MCP Server. Check a tool-level intent failure is not announced as success. Confirm namespaced tools target only the selected entity.
 7. Test two simultaneous voice devices, network loss during transcription, model errors, MCP timeout after execution, service shutdown, and speech cancellation. Confirm no command is retried automatically.
-8. Run a labelled corpus of actual partial transcripts; measure early/wrong/missed actions and choose thresholds empirically. Include Australian accents, room noise, negation, truncated and revised hypotheses, and overlapping entity names.
+8. Run a labelled corpus of actual partial transcripts; measure early/wrong/missed actions under highest-probability selection. Include Australian accents, room noise, negation, truncated and revised hypotheses, and overlapping entity names.
 9. Compare actual device state changes with reported MCP acceptance. Independent physical-state verification is not implemented yet.
 10. Test the external STT protocol with the specific provider adapter you plan to advertise. Do not advertise generic Whisper, Ollama, or Wyoming compatibility.

@@ -10,11 +10,12 @@ from urllib.parse import urlsplit
 import aiohttp
 from aiohttp import web
 from .models import LocalModels
-from .jev import JevClient
+from .jev import JevClient, JevAgent
 from .nemotron import Nemotron
 from .streaming import LiveDecisions
 from . import VERSION, SCORE_SCOPE
-from .controls import validate_controls, CONTROL_SCHEMA
+from .controls import validate_controls, CONTROL_SCHEMA, score_controls
+from .conversation import ControlConversation, CONVERSATION_SCHEMA, validate_context
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,12 @@ def validate_start(start):
             raise ValueError("Invalid aliases")
     if typed:
         validate_controls(candidates)
+    if "conversation_schema" in start:
+        if not typed or start["conversation_schema"] != CONVERSATION_SCHEMA:
+            raise ValueError("Unsupported conversation schema")
+        validate_context(start.get("context", {}))
+    elif "context" in start:
+        raise ValueError("Conversation context requires schema negotiation")
     stt = start.get("stt", {})
     if not isinstance(stt, dict) or stt.get("mode") not in ("bundled", "external", "sherpa", "text"):
         raise ValueError("Unknown transcription mode")
@@ -115,10 +122,15 @@ class Engine:
                 await self.nemotron.ready()
             except Exception:
                 ready = False
-        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "control_schema": CONTROL_SCHEMA if not self.jev else None, "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "stt_backend": self.stt_backend, "score_scope": SCORE_SCOPE, "ready": ready, "bundled_stt": self.nemotron is not None or self.models.recognizer is not None, "error": self.error if ready else self.error or "TranscriptionUnavailable", "active_sessions": self.active})
+        return web.json_response({"protocol": "truss-v1", "engine_version": VERSION, "control_schema": CONTROL_SCHEMA,
+            "conversation_schema": CONVERSATION_SCHEMA if self.jev or hasattr(self.models, "agent") else None,
+            "decision_backend": self.backend, "decision_model": self.jev.model if self.jev else "laya", "stt_backend": self.stt_backend, "score_scope": SCORE_SCOPE, "ready": ready, "bundled_stt": self.nemotron is not None or self.models.recognizer is not None, "error": self.error if ready else self.error or "TranscriptionUnavailable", "active_sessions": self.active})
 
     async def score(self, text, candidates):
         if self.jev:
+            if any("control" in c for c in candidates):
+                loop = asyncio.get_running_loop()
+                return await loop.run_in_executor(self.inference_pool, score_controls, JevAgent(self.jev, loop), text, candidates)
             return await self.jev.score(text, candidates)
         return await asyncio.get_running_loop().run_in_executor(self.inference_pool, self.models.score, text, candidates)
 
@@ -138,14 +150,20 @@ class Engine:
             self.sockets.add(ws)
             start = await asyncio.wait_for(ws.receive_json(), timeout=10)
             candidates = validate_start(start)
-            if self.jev and any("control" in c for c in candidates):
-                raise ValueError("Typed controls require the local LAYA backend")
             async def emit(event):
                 if event.get("type") == "probabilities":
                     event.setdefault("score_scope", SCORE_SCOPE)
                     event["decision_backend"] = self.backend
                 await ws.send_json(event)
-            decisions = LiveDecisions(self.score, emit, candidates)
+            score = self.score
+            if start.get("conversation_schema") == CONVERSATION_SCHEMA:
+                agent = JevAgent(self.jev, asyncio.get_running_loop()) if self.jev else self.models.agent
+                evaluator = ControlConversation(agent, candidates, start["context"])
+
+                async def score(text, candidates):
+                    return await asyncio.get_running_loop().run_in_executor(self.inference_pool, evaluator.evaluate, text)
+
+            decisions = LiveDecisions(score, emit, candidates)
             decisions_task = asyncio.create_task(decisions.run())
             if start["stt"]["mode"] == "text":
                 reader_task = asyncio.create_task(decisions.update(start["text"]))
@@ -162,7 +180,8 @@ class Engine:
                 await reader_task
                 decisions.finish()
                 await decisions_task
-                await ws.send_json({"type": "done", "text": decisions.text, "revision": decisions.revision})
+                await ws.send_json({"type": "done", "text": decisions.text, "revision": decisions.revision,
+                                   **({"context": decisions.context} if decisions.context is not None else {})})
 
             await asyncio.wait_for(run_session(), timeout=75)
         except (Exception,) as error:

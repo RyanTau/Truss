@@ -6,6 +6,28 @@ Since 0.1.7, text clients may send a normal start message with `stt: {"mode": "t
 
 There are two different WebSocket roles. Neither is an OpenAI-compatible audio upload API, Ollama endpoint, nor a Wyoming TCP endpoint.
 
+## Conversation controls (0.1.13)
+
+Local LAYA, and Jev since 0.1.14, advertise `conversation_schema: completed_pending_v1` in health.
+To opt in, send that field in the start envelope alongside typed candidates
+and `context: {"completed": "", "pending": ""}`. Text follow-ups restore the
+previous completed/pending context and send only the new message as `text`.
+Audio partials remain cumulative transcripts within their stream.
+
+Each completed decision emits a probability event with a session-local,
+sequential `decision_id` starting at 1 and the consumed `action_text`.
+The event includes `conversation_schema`, staged `trace`, and `context`.
+Incomplete evaluations emit a null decision. The final `done` event carries
+the final context. Clients must deduplicate decision IDs, execute in order,
+validate bindings locally, and discard stored context after execution failure.
+The engine commits evaluated text only after checking transcript freshness.
+Rewriting an already accepted prefix terminates the stream.
+
+Completed and pending text plus the current input are bounded to 1000 characters;
+at most 32 decisions are accepted per stream. Clients that do not opt in
+retain their existing behavior. Jev uses Choice questions for exact numeric
+target selection, adapting the distribution to the evaluator's numeric levels.
+
 ## Typed controls (0.1.12)
 
 LAYA health advertises `control_schema: device_attributes_v1`. A typed candidate
@@ -14,7 +36,7 @@ Fixed binary/activation candidates instead supply `value` and `value_label` in
 `control`. Candidate IDs still identify locally owned execution templates.
 Sessions cannot mix typed and legacy candidates. Typed sessions allow 192
 candidates across 24 devices, 128 values per attribute, and 4096 total values.
-Legacy sessions retain the 48-candidate limit. Jev rejects typed candidates.
+Legacy sessions retain the 48-candidate limit. Jev supports typed candidates since 0.1.14.
 
 Probability events add `trace` and an optional `decision` containing `candidate_id`,
 `device`, `attribute`, `value`, `probability`, and `margin`. An incomplete decision
@@ -51,7 +73,7 @@ Server messages:
 {"type":"done","revision":1,"text":"turn on the kitchen light"}
 ```
 
-Partial texts replace the complete hypothesis; they are not appended deltas. If an earlier word changes while inference runs, its result is discarded. If the new hypothesis only appends words at a word boundary, the scored prefix remains eligible: this permits action during continuous speech even when inference takes longer than an ASR update interval. `revision` and `text` identify the actual scored prefix; `current_revision` identifies the latest hypothesis at emission. The integration independently checks the prefix against its latest text. A later spoken correction cannot undo an action already issued. Pending inference coalesces to the newest hypothesis, with no unbounded queue. Every actionable event must contain a complete, finite [0,1] score vector. The HA integration owns thresholds and execution. `inference_ms` includes queue wait plus batched model work, not microphone-to-device latency.
+Partial texts replace the complete hypothesis; they are not appended deltas. If an earlier word changes while inference runs, its result is discarded. If the new hypothesis only appends words at a word boundary, the scored prefix remains eligible: this permits action during continuous speech even when inference takes longer than an ASR update interval. `revision` and `text` identify the actual scored prefix; `current_revision` identifies the latest hypothesis at emission. The integration independently checks the prefix against its latest text. A later spoken correction cannot undo an action already issued. Pending inference coalesces to the newest hypothesis, with no unbounded queue. Every actionable event must contain a complete, finite [0,1] score vector. The HA integration executes the highest-probability actionable candidate without a minimum probability or lead requirement; exact ties use catalogue order. All-zero maps and incomplete staged decisions do not execute. `inference_ms` includes queue wait plus batched model work, not microphone-to-device latency.
 
 `{"type":"error","message":"..."}` aborts the session. Disconnects/timeouts never trigger fallback actions or execution retries.
 

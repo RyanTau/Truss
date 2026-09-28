@@ -12,7 +12,7 @@
       },
       "engine": {
         "title": "Connect the local Truss engine",
-        "description": "Start the Truss engine on Windows, Docker, or Home Assistant OS and wait for 'Truss models are ready'. Enter the engine computer's LAN address, for example http://192.168.1.50:10350, and its pairing token. Choose bundled live transcription or a compatible streaming server. Standard Whisper upload and Ollama chat endpoints are not compatible.",
+        "description": "Start the Truss engine on Windows, Docker, or Home Assistant OS and wait for 'Truss models are ready'. Enter the engine computer's LAN address, for example http://192.168.1.50:10350, and its pairing token. Choose bundled live transcription or a compatible streaming server. Standard Whisper upload and Ollama chat endpoints are not compatible. Select Laya or Jev in the engine configuration; Jev requires your TypeSafe API key there. Restart the engine after switching, then reload this integration.",
         "data": {
           "engine_url": "Truss engine URL",
           "engine_token": "Truss engine API token",
@@ -22,12 +22,10 @@
         }
       },
       "actions": {
-        "title": "Choose devices and execution threshold",
-        "description": "Select the devices for your chosen mode and set the execution threshold. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
+        "title": "Choose devices",
+        "description": "Select the devices for your chosen mode. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
         "data": {
           "entities": "Allowed entities",
-          "threshold": "Minimum decision probability (0.5–1)",
-          "margin": "Minimum lead over competing choices (0–1)",
           "areas": "Rooms"
         }
       },
@@ -52,7 +50,7 @@
     "step": {
       "init": {
         "title": "Configure Truss Live Voice",
-        "description": "Changing settings reconnects Truss and stops active sessions. Choose the device selection mode here, then continue to its room or entity picker and probability settings.",
+        "description": "Changing settings reconnects Truss and stops active sessions. Choose the device selection mode here, then continue to its room or entity picker. To switch Laya/Jev, change decision_backend in the engine configuration and enter typesafe_api_key for Jev. Restart the engine, then reload Truss; the selected model is detected automatically.",
         "data": {
           "mcp_url": "MCP server URL",
           "mcp_token": "Home Assistant access token",
@@ -65,12 +63,10 @@
         }
       },
       "actions": {
-        "title": "Choose devices and execution threshold",
-        "description": "Select the devices for your chosen mode and set the execution threshold. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
+        "title": "Choose devices",
+        "description": "Select the devices for your chosen mode. The scope must contain 1–24 entities. Devices must be exposed in Settings > Voice assistants > Expose. Automatic modes refresh each utterance.",
         "data": {
           "entities": "Allowed entities",
-          "threshold": "Minimum decision probability (0.5–1)",
-          "margin": "Minimum lead over competing choices (0–1)",
           "areas": "Rooms"
         }
       }
